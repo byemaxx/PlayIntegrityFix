@@ -112,14 +112,105 @@ for config in $spoofConfig; do
 	fi
 done
 
-#解析发布日期和估算过期
+# calculate expiry date for beta
 REL_DATE_RAW=$(grep -m1 -A1 'Release date' PIXEL_OTA_HTML | tail -n1 | sed 's;.*<td>\(.*\)</td>.*;\1;')
 REL_DATE_FIXED=$(echo "$REL_DATE_RAW" | sed 's/ \([0-9],\)/ 0\1/')
 
-BETA_REL_DATE=$(date -D '%B %e, %Y' -d "$REL_DATE_RAW" +%Y-%m-%d 2>/dev/null)
-[ -z "$BETA_REL_DATE" ] && BETA_REL_DATE=$(date -D '%B %d, %Y' -d "$REL_DATE_FIXED" +%Y-%m-%d)
+# Universal date parser
+parse_date() {
+    local input_date="$1"
+    local result=""
+    
+    # 方法1: 尝试使用busybox date解析
+    if command -v busybox > /dev/null 2>&1; then
+        result=$(busybox date -D '%B %e, %Y' -d "$input_date" +%Y-%m-%d 2>/dev/null)
+        [ -n "$result" ] && echo "$result" && return
+        result=$(busybox date -D '%B %d, %Y' -d "$input_date" +%Y-%m-%d 2>/dev/null)
+        [ -n "$result" ] && echo "$result" && return
+    fi
+    
+    # 方法2: 尝试GNU date
+    result=$(date -d "$input_date" +%Y-%m-%d 2>/dev/null)
+    [ -n "$result" ] && echo "$result" && return
+    
+    # 方法3: 手动解析常见格式 (如 "December 5, 2024")
+    local month_name=$(echo "$input_date" | awk '{print $1}')
+    local day=$(echo "$input_date" | awk '{print $2}' | sed 's/,//')
+    local year=$(echo "$input_date" | awk '{print $3}')
+    
+    case "$month_name" in
+        "January") month="01" ;;
+        "February") month="02" ;;
+        "March") month="03" ;;
+        "April") month="04" ;;
+        "May") month="05" ;;
+        "June") month="06" ;;
+        "July") month="07" ;;
+        "August") month="08" ;;
+        "September") month="09" ;;
+        "October") month="10" ;;
+        "November") month="11" ;;
+        "December") month="12" ;;
+        *) return 1 ;;
+    esac
+    
+    # 确保日期是两位数
+    day=$(printf "%02d" "$day" 2>/dev/null) || return 1
+    
+    echo "$year-$month-$day"
+}
 
-BETA_EXP_DATE=$(date -D '%s' -d "$(($(date -D '%Y-%m-%d' -d "$BETA_REL_DATE" +%s) + 3628800))" +%Y-%m-%d)
+BETA_REL_DATE=$(parse_date "$REL_DATE_RAW")
+[ -z "$BETA_REL_DATE" ] && BETA_REL_DATE=$(parse_date "$REL_DATE_FIXED")
+
+# 计算过期日期（6 weeks = 42 days）
+if [ -n "$BETA_REL_DATE" ]; then
+    # 尝试使用busybox date计算
+    if command -v busybox > /dev/null 2>&1; then
+        BETA_EXP_DATE=$(busybox date -D '%Y-%m-%d' -d "$BETA_REL_DATE" +%s 2>/dev/null)
+        if [ -n "$BETA_EXP_DATE" ]; then
+            BETA_EXP_DATE=$((BETA_EXP_DATE + 3628800))
+            BETA_EXP_DATE=$(busybox date -D '%s' -d "$BETA_EXP_DATE" +%Y-%m-%d 2>/dev/null)
+        fi
+    fi
+    
+    # 如果busybox方法失败，尝试GNU date
+    if [ -z "$BETA_EXP_DATE" ]; then
+        BETA_EXP_DATE=$(date -d "$BETA_REL_DATE + 42 days" +%Y-%m-%d 2>/dev/null)
+    fi
+    
+    # 如果都失败，使用简单的近似计算（假设每月30天）
+    if [ -z "$BETA_EXP_DATE" ]; then
+        year=$(echo "$BETA_REL_DATE" | cut -d- -f1)
+        month=$(echo "$BETA_REL_DATE" | cut -d- -f2)
+        day=$(echo "$BETA_REL_DATE" | cut -d- -f3)
+        
+        # 加42天的简单近似
+        new_day=$((day + 42))
+        new_month=$month
+        new_year=$year
+        
+        if [ $new_day -gt 30 ]; then
+            new_month=$((month + 1))
+            new_day=$((new_day - 30))
+            if [ $new_month -gt 12 ]; then
+                new_year=$((year + 1))
+                new_month=1
+            fi
+        fi
+          BETA_EXP_DATE=$(printf "%04d-%02d-%02d" "$new_year" "$new_month" "$new_day")
+    fi
+fi
+
+# Debug output for date parsing
+echo "- Date parsing debug info:"
+echo "  Raw date from HTML: '$REL_DATE_RAW'"
+echo "  Fixed date format: '$REL_DATE_FIXED'"
+echo "  Parsed release date: '$BETA_REL_DATE'"
+echo "  Estimated expiry date: '$BETA_EXP_DATE'"
+echo "  Available date commands:"
+echo "    busybox: $(command -v busybox >/dev/null && echo 'yes' || echo 'no')"
+echo "    date: $(command -v date >/dev/null && echo 'yes' || echo 'no')"
 
 # Determine update method
 UPDATE_METHOD="manual"
