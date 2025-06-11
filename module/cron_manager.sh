@@ -148,11 +148,24 @@ create_busybox_cron_job() {
     local cron_expression
     
     # Generate cron expression based on interval format
-    if echo "$interval" | grep -q "^custom:"; then
-        # Custom time format: custom:H:M
-        local hours=$(echo "$interval" | cut -d':' -f2)
-        local minutes=$(echo "$interval" | cut -d':' -f3)
-        cron_expression="$minutes $hours * * *"
+    if echo "$interval" | grep -q "^interval:"; then
+        # Custom interval format: interval:Xm (X total minutes)
+        local total_mins=$(echo "$interval" | sed 's/^interval://' | sed 's/m$//')
+        if [ "$total_mins" -lt 60 ]; then
+            # Less than 60 minutes, use minute-based cron
+            cron_expression="*/$total_mins * * * *"
+        else
+            # 60+ minutes, convert to hours and remaining minutes
+            local hours=$((total_mins / 60))
+            local remaining_mins=$((total_mins % 60))
+            if [ "$remaining_mins" -eq 0 ]; then
+                # Exact hours
+                cron_expression="0 */$hours * * *"
+            else
+                # Use minute-based cron for complex intervals
+                cron_expression="*/$total_mins * * * *"
+            fi
+        fi
     elif echo "$interval" | grep -q "m$"; then
         # Minute interval format: Xm
         local mins=$(echo "$interval" | sed 's/m$//')
@@ -191,11 +204,24 @@ create_system_cron_job() {
     local cron_expression
     
     # Generate cron expression based on interval format
-    if echo "$interval" | grep -q "^custom:"; then
-        # Custom time format: custom:H:M
-        local hours=$(echo "$interval" | cut -d':' -f2)
-        local minutes=$(echo "$interval" | cut -d':' -f3)
-        cron_expression="$minutes $hours * * *"
+    if echo "$interval" | grep -q "^interval:"; then
+        # Custom interval format: interval:Xm (X total minutes)
+        local total_mins=$(echo "$interval" | sed 's/^interval://' | sed 's/m$//')
+        if [ "$total_mins" -lt 60 ]; then
+            # Less than 60 minutes, use minute-based cron
+            cron_expression="*/$total_mins * * * *"
+        else
+            # 60+ minutes, convert to hours and remaining minutes
+            local hours=$((total_mins / 60))
+            local remaining_mins=$((total_mins % 60))
+            if [ "$remaining_mins" -eq 0 ]; then
+                # Exact hours
+                cron_expression="0 */$hours * * *"
+            else
+                # Use minute-based cron for complex intervals
+                cron_expression="*/$total_mins * * * *"
+            fi
+        fi
     elif echo "$interval" | grep -q "m$"; then
         # Minute interval format: Xm
         local mins=$(echo "$interval" | sed 's/m$//')

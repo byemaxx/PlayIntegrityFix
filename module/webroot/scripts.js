@@ -55,7 +55,7 @@ function applyButtonEventListeners() {    const fetchButton = document.getElemen
             console.error('Failed to switch fingerprint type:', error);
         }
         shellRunning = false;
-    });    // 已移除advanced按钮点击事件
+    });   
         clearButton.addEventListener('click', () => {
         terminal.innerHTML = '';
         currentFontSize = 14;
@@ -224,9 +224,15 @@ function getCurrentTimeSettings() {
     const isCustom = cronIntervalType.value === 'custom';
     
     if (isCustom) {
-        const hours = customHours.value;
-        const minutes = customMinutes.value;
-        return `custom:${hours}:${minutes}`;
+        const hours = parseInt(customHours.value) || 0;
+        const minutes = parseInt(customMinutes.value) || 0;
+        
+        // Convert to total minutes for interval
+        const totalMinutes = hours * 60 + minutes;
+        if (totalMinutes === 0) {
+            return '30m'; // Default fallback
+        }
+        return `interval:${totalMinutes}m`;
     } else {
         return cronInterval.value;
     }
@@ -251,27 +257,27 @@ function parseCronSettings(cronLine) {
     if (!cronLine) return { type: 'preset', value: '24h' };
     
     // Parse different cron formats
-    if (cronLine.match(/^\d+ \d+ \* \* \*/)) {
-        // Custom time format: "M H * * *"
-        const match = cronLine.match(/^(\d+) (\d+) \* \* \*/);
-        if (match) {
-            return {
-                type: 'custom',
-                hours: match[2],
-                minutes: match[1]
-            };
-        }
-    } else if (cronLine.match(/^0 \*\/(\d+) \* \* \*/)) {
-        // Interval format: "0 */X * * *"
-        const match = cronLine.match(/^0 \*\/(\d+) \* \* \*/);
-        if (match) {
-            return { type: 'preset', value: `${match[1]}h` };
-        }
-    } else if (cronLine.match(/^\*\/(\d+) \* \* \* \*/)) {
+    if (cronLine.match(/^\*\/(\d+) \* \* \* \*/)) {
         // Minute interval format: "*/X * * * *"
         const match = cronLine.match(/^\*\/(\d+) \* \* \* \*/);
         if (match) {
-            return { type: 'preset', value: `${match[1]}m` };
+            const totalMinutes = parseInt(match[1]);
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            
+            if (hours > 0 || minutes > 0) {
+                return {
+                    type: 'custom',
+                    hours: hours.toString(),
+                    minutes: minutes.toString()
+                };
+            }
+        }
+    } else if (cronLine.match(/^0 \*\/(\d+) \* \* \*/)) {
+        // Hour interval format: "0 */X * * *"
+        const match = cronLine.match(/^0 \*\/(\d+) \* \* \*/);
+        if (match) {
+            return { type: 'preset', value: `${match[1]}h` };
         }
     } else if (cronLine.match(/^0 0 \* \* \*/)) {
         // Daily format: "0 0 * * *"
@@ -304,9 +310,16 @@ function updateCronStatus(isEnabled) {
         const timeSettings = getCurrentTimeSettings();
         let statusMessage;
         
-        if (timeSettings.startsWith('custom:')) {
-            const [, hours, minutes] = timeSettings.split(':');
-            statusMessage = `Status: Active (Daily at ${hours.padStart(2, '0')}:${minutes.padStart(2, '0')})`;
+        if (timeSettings.startsWith('interval:')) {
+            const totalMinutes = parseInt(timeSettings.replace('interval:', '').replace('m', ''));
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            
+            let parts = [];
+            if (hours > 0) parts.push(`${hours} hour${hours !== 1 ? 's' : ''}`);
+            if (minutes > 0) parts.push(`${minutes} minute${minutes !== 1 ? 's' : ''}`);
+            
+            statusMessage = `Status: Active (Every ${parts.join(' ')})`;
         } else {
             const value = timeSettings.replace(/[hm]$/, '');
             const unit = timeSettings.endsWith('m') ? 'minute' : 'hour';
@@ -330,9 +343,16 @@ async function setupCronJob(enable, timeSettings) {
             await execCommand(`sh /data/adb/modules/playintegrityfix/cron_manager.sh add "${timeSettings}"`);
             
             let message;
-            if (timeSettings.startsWith('custom:')) {
-                const [, hours, minutes] = timeSettings.split(':');
-                message = `[+] Cron job enabled: Daily at ${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
+            if (timeSettings.startsWith('interval:')) {
+                const totalMinutes = parseInt(timeSettings.replace('interval:', '').replace('m', ''));
+                const hours = Math.floor(totalMinutes / 60);
+                const minutes = totalMinutes % 60;
+                
+                let parts = [];
+                if (hours > 0) parts.push(`${hours} hour${hours !== 1 ? 's' : ''}`);
+                if (minutes > 0) parts.push(`${minutes} minute${minutes !== 1 ? 's' : ''}`);
+                
+                message = `[+] Cron job enabled: Every ${parts.join(' ')}`;
             } else {
                 const value = timeSettings.replace(/[hm]$/, '');
                 const unit = timeSettings.endsWith('m') ? 'minute' : 'hour';
@@ -491,16 +511,45 @@ cronInterval.addEventListener('change', async () => {
     updateCronJobWithCurrentSettings();
 });
 
-// Custom time change event listeners
+// Custom time change event listeners with validation
 customHours.addEventListener('change', async () => {
+    // Validate hours input
+    let hours = parseInt(customHours.value);
+    if (isNaN(hours) || hours < 0) hours = 0;
+    if (hours > 23) hours = 23;
+    customHours.value = hours;
+    
+    // Ensure at least one of hours or minutes is greater than 0
+    validateCustomInterval();
+    
     if (shellRunning || !cronToggle.checked || cronIntervalType.value !== 'custom') return;
     updateCronJobWithCurrentSettings();
 });
 
 customMinutes.addEventListener('change', async () => {
+    // Validate minutes input
+    let minutes = parseInt(customMinutes.value);
+    if (isNaN(minutes) || minutes < 0) minutes = 0;
+    if (minutes > 59) minutes = 59;
+    customMinutes.value = minutes;
+    
+    // Ensure at least one of hours or minutes is greater than 0
+    validateCustomInterval();
+    
     if (shellRunning || !cronToggle.checked || cronIntervalType.value !== 'custom') return;
     updateCronJobWithCurrentSettings();
 });
+
+// Function to validate custom interval
+function validateCustomInterval() {
+    const hours = parseInt(customHours.value) || 0;
+    const minutes = parseInt(customMinutes.value) || 0;
+    
+    if (hours === 0 && minutes === 0) {
+        // Set minimum interval to 30 minutes
+        customMinutes.value = 30;
+    }
+}
 
 // Function to append element in output terminal
 function appendToOutput(content) {

@@ -64,12 +64,11 @@
                     <input type="checkbox" id="toggle-cron" disabled>
                     <span class="slider round"></span>
                 </label>
-            </div>            <div class="input-section" id="cron-interval-section" style="display: none;">
-                <div class="input-group">
+            </div>            <div class="input-section" id="cron-interval-section" style="display: none;">                <div class="input-group">
                     <label for="cron-interval-type">Update Interval Type:</label>
                     <select id="cron-interval-type" disabled>
                         <option value="preset" selected>Preset Intervals</option>
-                        <option value="custom">Custom Time</option>
+                        <option value="custom">Custom Interval</option>
                     </select>
                 </div>
                 <div class="input-group" id="preset-interval-group">
@@ -84,25 +83,23 @@
                         <option value="72h">72 hours</option>
                         <option value="168h">1 week</option>
                     </select>
-                </div>
-                <div class="custom-time-group" id="custom-time-group" style="display: none;">
+                </div>                <div class="custom-time-group" id="custom-time-group" style="display: none;">
                     <div class="input-group">
                         <label for="custom-hours">Hours (0-23):</label>
-                        <input type="number" id="custom-hours" min="0" max="23" value="0" disabled>
+                        <input type="number" id="custom-hours" min="0" max="23" value="2" disabled>
                     </div>
                     <div class="input-group">
                         <label for="custom-minutes">Minutes (0-59):</label>
                         <input type="number" id="custom-minutes" min="0" max="59" value="30" disabled>
                     </div>
                     <div class="custom-time-info">
-                        <small>Custom interval will run every day at the specified time</small>
+                        <small>Custom interval will run every X hours and Y minutes (e.g., every 2 hours 30 minutes)</small>
                     </div>
                 </div>
                 <div class="cron-status">
                     <span id="cron-status-text">Status: Disabled</span>
                 </div>
             </div>
-            <!-- Advanced按钮已被移除 -->
         </div>
         <div class="output-terminal">
             <div class="output-terminal-header">

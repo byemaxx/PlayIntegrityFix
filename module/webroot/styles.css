@@ -177,12 +177,15 @@ input:checked+.slider:before {
     width: calc(85vw + 30px);
     max-width: 800px;
     flex-grow: 1;
+    min-height: 250px;
     background-color: var(--bg-input);
     box-sizing: border-box;
     border-radius: 15px;
     box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.2);
     margin-top: 15px;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .output-terminal-header {
@@ -193,6 +196,7 @@ input:checked+.slider:before {
     background-color: var(--bg-secondary);
     color: var(--text-muted);
     user-select: none;
+    flex-shrink: 0;
 }
 
 .clear-terminal {
@@ -209,7 +213,7 @@ input:checked+.slider:before {
     font-size: 14px;
     padding: 10px;
     width: calc(100% - 20px);
-    height: calc(100% - 50px);
+    flex-grow: 1;
     min-height: 200px;
     overflow-y: auto;
 }
