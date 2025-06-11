@@ -57,6 +57,31 @@
                     <span class="slider round"></span>
                 </label>
             </div>
+            <!-- Cron Job Configuration -->
+            <div class="toggle-list ripple-element" id="cron-toggle-container">
+                <span class="toggle-text">Enable Auto Update</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="toggle-cron" disabled>
+                    <span class="slider round"></span>
+                </label>
+            </div>
+            <div class="input-section" id="cron-interval-section" style="display: none;">
+                <div class="input-group">
+                    <label for="cron-interval">Update Interval (hours):</label>
+                    <select id="cron-interval" disabled>
+                        <option value="1">1 hour</option>
+                        <option value="6">6 hours</option>
+                        <option value="12">12 hours</option>
+                        <option value="24" selected>24 hours (Default)</option>
+                        <option value="48">48 hours</option>
+                        <option value="72">72 hours</option>
+                        <option value="168">1 week</option>
+                    </select>
+                </div>
+                <div class="cron-status">
+                    <span id="cron-status-text">Status: Disabled</span>
+                </div>
+            </div>
             <!-- Advanced按钮已被移除 -->
         </div>
         <div class="output-terminal">

@@ -39,3 +39,6 @@ resetprop_if_diff vendor.boot.vbmeta.device_state locked
 
 # Other
 resetprop_if_diff sys.oem_unlock_allowed 0
+
+# Initialize cron service for auto-update feature
+sh "$MODPATH/cron_manager.sh" start &

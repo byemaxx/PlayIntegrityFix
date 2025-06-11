@@ -121,6 +121,17 @@ BETA_REL_DATE=$(date -D '%B %e, %Y' -d "$REL_DATE_RAW" +%Y-%m-%d 2>/dev/null)
 
 BETA_EXP_DATE=$(date -D '%s' -d "$(($(date -D '%Y-%m-%d' -d "$BETA_REL_DATE" +%s) + 3628800))" +%Y-%m-%d)
 
+# Determine update method
+UPDATE_METHOD="manual"
+if [ -n "$CRON_JOB" ] || echo "$0" | grep -q "cron"; then
+    UPDATE_METHOD="auto"
+elif [ -n "$MMRL" ]; then
+    UPDATE_METHOD="webui"
+fi
+
+# Get current timestamp
+CURRENT_TIME=$(date '+%Y-%m-%d %H:%M:%S')
+
 echo "- Dumping values to pif.json ..."
 cat <<EOF | tee pif.json
 {
@@ -134,7 +145,9 @@ cat <<EOF | tee pif.json
   "DEBUG": $DEBUG,
   "spoofVendingSdk": $spoofVendingSdk,
   "// BETA_RELEASE_DATE": "$BETA_REL_DATE",
-  "// ESTIMATED_EXPIRY": "$BETA_EXP_DATE"
+  "// ESTIMATED_EXPIRY": "$BETA_EXP_DATE",
+  "// LAST_UPDATE_TIME": "$CURRENT_TIME",
+  "// UPDATE_METHOD": "$UPDATE_METHOD"
 }
 EOF
 

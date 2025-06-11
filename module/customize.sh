@@ -79,6 +79,7 @@ if [ -f "/data/adb/pif.json" ]; then
     mv -f /data/adb/pif.json /data/adb/pif.json.old
 fi
 
-# give exec perm to action.sh
+# give exec perm to action.sh and cron_manager.sh
 chmod +x "$MODPATH/action.sh"
+chmod +x "$MODPATH/cron_manager.sh"
 
