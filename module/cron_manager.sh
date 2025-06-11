@@ -124,6 +124,10 @@ start_cron_daemon() {
 stop_cron_daemon() {
     local cron_pid
     
+    # Clean up any potential wake locks before stopping
+    echo "PlayIntegrityFix.taskExecution" >> /sys/power/wake_unlock 2>/dev/null || true
+    echo "PlayIntegrityFix.noSuspend" >> /sys/power/wake_unlock 2>/dev/null || true
+    
     # Read saved PID first
     if [ -f "$BACKUP_DIR/cron_pid" ]; then
         cron_pid=$(cat "$BACKUP_DIR/cron_pid")
@@ -414,9 +418,13 @@ log_system_info() {
 setup_wake_lock() {
     # Only set wake lock if file doesn't exist to disable it
     if [ ! -f "$BACKUP_DIR/nowakelock" ]; then
-        echo "PlayIntegrityFix.noSuspend" >> /sys/power/wake_lock 2>/dev/null || true
-        log_info "Wake lock enabled (prevents sleep during cron execution)"
+        # Note: Wake lock is now managed per-task execution in action.sh
+        # This provides better power management by only preventing sleep during actual task execution
+        log_info "Wake lock management enabled (prevents sleep during task execution only)"
+        log_info "Tasks will acquire wake lock individually for ~2 seconds during execution"
         log_info "To disable: touch $BACKUP_DIR/nowakelock && reboot"
+    else
+        log_info "Wake lock management disabled by user preference"
     fi
 }
 

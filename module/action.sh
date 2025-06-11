@@ -5,6 +5,55 @@ MODDIR=/data/adb/modules/playintegrityfix
 version=$(grep "^version=" $MODDIR/module.prop | sed 's/version=//g')
 FORCE_PREVIEW=1
 
+# Wake lock management for cron execution
+acquire_wake_lock() {
+    if [ -n "$CRON_JOB" ] && [ ! -f "$MODDIR/backup/nowakelock" ]; then
+        echo "PlayIntegrityFix.taskExecution" >> /sys/power/wake_lock 2>/dev/null || true
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Wake lock acquired for task execution" >> "$MODDIR/cron.log"
+    fi
+}
+
+release_wake_lock() {
+    if [ -n "$CRON_JOB" ] && [ ! -f "$MODDIR/backup/nowakelock" ]; then
+        echo "PlayIntegrityFix.taskExecution" >> /sys/power/wake_unlock 2>/dev/null || true
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Wake lock released after task completion" >> "$MODDIR/cron.log"
+    fi
+}
+
+# Cron execution logging
+log_cron_execution() {
+    if [ -n "$CRON_JOB" ]; then
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Auto update started" >> "$MODDIR/cron.log"
+    fi
+}
+
+log_cron_completion() {
+    if [ -n "$CRON_JOB" ]; then
+        local exit_code="${1:-0}"
+        if [ "$exit_code" -eq 0 ]; then
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Auto update completed successfully" >> "$MODDIR/cron.log"
+        else
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Auto update failed (exit code: $exit_code)" >> "$MODDIR/cron.log"
+        fi
+    fi
+}
+
+# Set up cleanup trap to ensure wake lock is always released
+cleanup() {
+    local exit_code=$?
+    release_wake_lock
+    log_cron_completion "$exit_code"
+    rm -rf "$TEMPDIR" 2>/dev/null || true
+    exit "${1:-$exit_code}"
+}
+trap cleanup EXIT INT TERM
+
+# Log cron execution start
+log_cron_execution
+
+# Acquire wake lock at the start of execution
+acquire_wake_lock
+
 # lets try to use tmpfs for processing
 TEMPDIR="$MODDIR/temp" #fallback
 [ -w /sbin ] && TEMPDIR="/sbin/playintegrityfix"
@@ -30,6 +79,7 @@ download_fail() {
 	echo "$1" | grep -q "\.zip$" && return
 	# Clean up on download fail
 	rm -rf "$TEMPDIR"
+	
 	ping -c 1 -W 5 "$dl_domain" > /dev/null 2>&1 || {
 		echo "[!] Unable to connect to $dl_domain, please check your internet connection and try again"
 		sleep_pause
@@ -255,3 +305,5 @@ done
 
 echo "- Done!"
 sleep_pause
+
+# Wake lock will be automatically released by the cleanup trap
