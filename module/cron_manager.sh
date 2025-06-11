@@ -147,11 +147,31 @@ create_busybox_cron_job() {
     local interval="$1"
     local cron_expression
     
-    # Generate cron expression
-    if [ "$interval" = "24" ]; then
-        cron_expression="0 0 * * *"  # Daily at midnight
+    # Generate cron expression based on interval format
+    if echo "$interval" | grep -q "^custom:"; then
+        # Custom time format: custom:H:M
+        local hours=$(echo "$interval" | cut -d':' -f2)
+        local minutes=$(echo "$interval" | cut -d':' -f3)
+        cron_expression="$minutes $hours * * *"
+    elif echo "$interval" | grep -q "m$"; then
+        # Minute interval format: Xm
+        local mins=$(echo "$interval" | sed 's/m$//')
+        cron_expression="*/$mins * * * *"
+    elif echo "$interval" | grep -q "h$"; then
+        # Hour interval format: Xh
+        local hrs=$(echo "$interval" | sed 's/h$//')
+        if [ "$hrs" = "24" ]; then
+            cron_expression="0 0 * * *"  # Daily at midnight
+        else
+            cron_expression="0 */$hrs * * *"  # Every X hours
+        fi
     else
-        cron_expression="0 */$interval * * *"  # Every X hours
+        # Legacy format (plain number assumed as hours)
+        if [ "$interval" = "24" ]; then
+            cron_expression="0 0 * * *"  # Daily at midnight
+        else
+            cron_expression="0 */$interval * * *"  # Every X hours
+        fi
     fi
     
     # Create cron file
@@ -161,7 +181,7 @@ create_busybox_cron_job() {
     # Save configuration
     save_cron_config "$cron_expression"
     
-    log_info "Created busybox cron job: Every $interval hour(s) [$cron_expression]"
+    log_info "Created busybox cron job: $interval [$cron_expression]"
     return 0
 }
 
@@ -170,11 +190,31 @@ create_system_cron_job() {
     local interval="$1"
     local cron_expression
     
-    # Generate cron expression
-    if [ "$interval" = "24" ]; then
-        cron_expression="0 0 * * *"  # Daily at midnight
+    # Generate cron expression based on interval format
+    if echo "$interval" | grep -q "^custom:"; then
+        # Custom time format: custom:H:M
+        local hours=$(echo "$interval" | cut -d':' -f2)
+        local minutes=$(echo "$interval" | cut -d':' -f3)
+        cron_expression="$minutes $hours * * *"
+    elif echo "$interval" | grep -q "m$"; then
+        # Minute interval format: Xm
+        local mins=$(echo "$interval" | sed 's/m$//')
+        cron_expression="*/$mins * * * *"
+    elif echo "$interval" | grep -q "h$"; then
+        # Hour interval format: Xh
+        local hrs=$(echo "$interval" | sed 's/h$//')
+        if [ "$hrs" = "24" ]; then
+            cron_expression="0 0 * * *"  # Daily at midnight
+        else
+            cron_expression="0 */$hrs * * *"  # Every X hours
+        fi
     else
-        cron_expression="0 */$interval * * *"  # Every X hours
+        # Legacy format (plain number assumed as hours)
+        if [ "$interval" = "24" ]; then
+            cron_expression="0 0 * * *"  # Daily at midnight
+        else
+            cron_expression="0 */$interval * * *"  # Every X hours
+        fi
     fi
     
     # Remove existing entries and add new one
@@ -183,7 +223,7 @@ create_system_cron_job() {
     # Save configuration
     save_cron_config "$cron_expression"
     
-    log_info "Created system cron job: Every $interval hour(s) [$cron_expression]"
+    log_info "Created system cron job: $interval [$cron_expression]"
     return 0
 }
 

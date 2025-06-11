@@ -210,6 +210,7 @@ input:checked+.slider:before {
     padding: 10px;
     width: calc(100% - 20px);
     height: calc(100% - 50px);
+    min-height: 200px;
     overflow-y: auto;
 }
 
@@ -294,6 +295,48 @@ input:checked+.slider:before {
 .input-group select:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+}
+
+.input-group input[type="number"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-family: inherit;
+    appearance: none;
+}
+
+.input-group input[type="number"]:focus {
+    outline: none;
+    border-color: var(--btn-primary);
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.input-group input[type="number"]:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.custom-time-group {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.custom-time-info {
+    padding: 8px 12px;
+    border-radius: 6px;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-color);
+}
+
+.custom-time-info small {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-style: italic;
 }
 
 .cron-status {

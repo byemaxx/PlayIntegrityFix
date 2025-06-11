@@ -1,13 +1,37 @@
 #!/bin/sh
 
 # PlayIntegrityFix Auto-Update Test Script
-# 测试改进后的 cron 管理功能
 
 MODDIR="/data/adb/modules/playintegrityfix"
 CRON_MANAGER="$MODDIR/cron_manager.sh"
 
 echo "🧪 PlayIntegrityFix Auto-Update 功能测试"
-echo "==========================================="
+echo "=================================================="
+echo ""
+
+# Function to run test and capture result
+run_test() {
+    local test_name="$1"
+    local command="$2"
+    local expected="$3"
+    
+    echo "Testing: $test_name"
+    echo "Command: $command"
+    
+    # Run the command and capture output
+    result=$(eval "$command" 2>&1)
+    
+    if echo "$result" | grep -q "$expected"; then
+        echo "✅ PASS: $test_name"
+    else
+        echo "❌ FAIL: $test_name"
+        echo "Expected: $expected"
+        echo "Got: $result"
+    fi
+    echo ""
+}
+
+echo "--- Testing Enhanced Time Format Parsing ---"
 
 # 检查文件存在
 if [ ! -f "$CRON_MANAGER" ]; then
@@ -216,5 +240,22 @@ echo "🔧 如需进一步测试，请运行："
 echo "   sh $CRON_MANAGER logs    # 查看详细日志"
 echo "   sh $CRON_MANAGER start   # 启动服务"
 echo "   sh $CRON_MANAGER restart # 重启服务"
+
+echo ""
+echo "🌐 WebUI 测试说明"
+echo "=================="
+echo "1. 在 MMRL 或浏览器中打开 webui"
+echo "2. 切换 'Enable Auto Update' 开关"
+echo "3. 尝试在 '预设间隔' 和 '自定义时间' 之间切换"
+echo "4. 预设间隔: 选择不同间隔 (30m, 1h, 6h, 等)"
+echo "5. 自定义时间: 设置具体的小时 (0-23) 和分钟 (0-59)"
+echo "6. 检查状态文本是否正确更新"
+echo "7. 验证输出终端显示正确的消息"
+echo "8. 检查终端是否有最小高度 (不应太小)"
+echo ""
+echo "✨ 增强功能已实现:"
+echo "   - 支持分钟和小时的自定义设置"
+echo "   - 输出终端添加了最小高度限制"
+echo "   - 改进的时间格式显示"
 
 exit 0
