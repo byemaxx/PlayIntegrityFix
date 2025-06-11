@@ -185,13 +185,10 @@ create_busybox_cron_job() {
         else
             cron_expression="0 */$interval * * *"  # Every X hours
         fi
-    fi
-    
-    # Create cron file
+    fi    # Create cron file
     echo "$cron_expression CRON_JOB=1 sh $ACTION_SCRIPT > /dev/null 2>&1" > "$BACKUP_DIR/root"
     chmod 755 "$BACKUP_DIR/root"
-    
-    # Save configuration
+    # Save cron expression for restoration after reboot
     save_cron_config "$cron_expression"
     
     log_info "Created busybox cron job: $interval [$cron_expression]"
@@ -241,12 +238,9 @@ create_system_cron_job() {
         else
             cron_expression="0 */$interval * * *"  # Every X hours
         fi
-    fi
-    
-    # Remove existing entries and add new one
+    fi    # Remove existing entries and add new one
     (crontab -l 2>/dev/null | grep -v "$ACTION_SCRIPT"; echo "$cron_expression CRON_JOB=1 sh $ACTION_SCRIPT > /dev/null 2>&1 $CRON_MARKER") | crontab -
-    
-    # Save configuration
+    # Save cron expression for restoration after reboot  
     save_cron_config "$cron_expression"
     
     log_info "Created system cron job: $interval [$cron_expression]"
@@ -255,37 +249,64 @@ create_system_cron_job() {
 
 # Function to restore cron job after reboot
 restore_cron_job() {
-    # Check if we have a saved cron config
+    # Try to restore from saved cron expression
     if [ -f "$MODDIR/cron_config" ]; then
         local cron_expression
         cron_expression=$(cat "$MODDIR/cron_config")
         if [ -n "$cron_expression" ]; then
-            # Extract interval from cron expression
+            # Extract interval from cron expression for logging
             local interval
             if echo "$cron_expression" | grep -q "0 0 \* \* \*"; then
-                interval="24"
+                # Daily format: "0 0 * * *"
+                interval="24h"
+            elif echo "$cron_expression" | grep -q "^0 \*/[0-9]\+ \* \* \*"; then
+                # Hour interval format: "0 */X * * *"
+                local hrs=$(echo "$cron_expression" | sed -n 's/^0 \*\/\([0-9]\+\) \* \* \*$/\1/p')
+                interval="${hrs}h"
+            elif echo "$cron_expression" | grep -q "^\*/[0-9]\+ \* \* \* \*"; then
+                # Minute interval format: "*/X * * * *"
+                local mins=$(echo "$cron_expression" | sed -n 's/^\*\/\([0-9]\+\) \* \* \* \*$/\1/p')
+                if [ "$mins" -ge 60 ]; then
+                    # Convert back to interval:Xm format for complex intervals
+                    interval="interval:${mins}m"
+                else
+                    interval="${mins}m"
+                fi
             else
-                interval=$(echo "$cron_expression" | sed -n 's/^0 \*\/\([0-9]\+\) \* \* \*$/\1/p')
-                [ -z "$interval" ] && interval="24"
+                # Default fallback
+                interval="24h"
             fi
             
+            # Recreate cron job using the saved cron expression directly
             if check_busybox_cron; then
-                create_busybox_cron_job "$interval"
+                echo "$cron_expression CRON_JOB=1 sh $ACTION_SCRIPT > /dev/null 2>&1" > "$BACKUP_DIR/root"
+                chmod 755 "$BACKUP_DIR/root"
             elif check_system_cron; then
-                create_system_cron_job "$interval"
+                (crontab -l 2>/dev/null | grep -v "$ACTION_SCRIPT"; echo "$cron_expression CRON_JOB=1 sh $ACTION_SCRIPT > /dev/null 2>&1 $CRON_MARKER") | crontab -
             fi
             
-            log_info "Restored cron job: $cron_expression"
+            log_info "Restored cron job: $cron_expression (interval: $interval)"
+            return
         fi
+    fi
+    
+    # Fallback if no config file exists
+    log_info "No saved cron configuration found, using default 24h interval"
+    if check_busybox_cron; then
+        create_busybox_cron_job "24h"
+    elif check_system_cron; then
+        create_system_cron_job "24h"
     fi
 }
 
 # Function to save cron configuration
 save_cron_config() {
     if [ -n "$1" ]; then
+        # Save cron expression
         echo "$1" > "$MODDIR/cron_config"
     else
         rm -f "$MODDIR/cron_config"
+        rm -f "$MODDIR/cron_interval"
     fi
 }
 

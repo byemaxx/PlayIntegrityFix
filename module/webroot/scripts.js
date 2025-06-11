@@ -262,22 +262,53 @@ function parseCronSettings(cronLine) {
         const match = cronLine.match(/^\*\/(\d+) \* \* \* \*/);
         if (match) {
             const totalMinutes = parseInt(match[1]);
+            
+            // Check if it matches a preset interval (only for minutes < 60)
+            const presetMap = {
+                30: '30m'
+            };
+            
+            if (presetMap[totalMinutes]) {
+                return { type: 'preset', value: presetMap[totalMinutes] };
+            }
+            
+            // For non-preset intervals or large intervals, use custom format
             const hours = Math.floor(totalMinutes / 60);
             const minutes = totalMinutes % 60;
             
-            if (hours > 0 || minutes > 0) {
-                return {
-                    type: 'custom',
-                    hours: hours.toString(),
-                    minutes: minutes.toString()
-                };
-            }
+            return {
+                type: 'custom',
+                hours: hours.toString(),
+                minutes: minutes.toString()
+            };
         }
     } else if (cronLine.match(/^0 \*\/(\d+) \* \* \*/)) {
         // Hour interval format: "0 */X * * *"
         const match = cronLine.match(/^0 \*\/(\d+) \* \* \*/);
         if (match) {
-            return { type: 'preset', value: `${match[1]}h` };
+            const hours = parseInt(match[1]);
+            
+            // Check if it matches a preset interval
+            const presetMap = {
+                1: '1h',
+                6: '6h',
+                12: '12h',
+                24: '24h',
+                48: '48h',
+                72: '72h',
+                168: '168h'
+            };
+            
+            if (presetMap[hours]) {
+                return { type: 'preset', value: presetMap[hours] };
+            }
+            
+            // For non-preset hour intervals, use custom format
+            return {
+                type: 'custom',
+                hours: hours.toString(),
+                minutes: '0'
+            };
         }
     } else if (cronLine.match(/^0 0 \* \* \*/)) {
         // Daily format: "0 0 * * *"

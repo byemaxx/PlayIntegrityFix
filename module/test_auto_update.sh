@@ -77,7 +77,7 @@ if "$CRON_MANAGER" remove; then
     echo "✓ Successfully removed cron job"
     
     # Check if it was removed
-    FINAL_STATUS=$("CRON_MANAGER" status)
+    FINAL_STATUS=$("$CRON_MANAGER" status)
     echo "Final status: $FINAL_STATUS"
     
     if echo "$FINAL_STATUS" | grep -q "disabled"; then
