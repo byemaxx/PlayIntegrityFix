@@ -41,21 +41,51 @@ function applyButtonEventListeners() {    const fetchButton = document.getElemen
     const clearButton = document.querySelector('.clear-terminal');
     const terminal = document.querySelector('.output-terminal-content');
 
-    fetchButton.addEventListener('click', runAction);
-    previewFpToggle.addEventListener('click', async () => {
+    fetchButton.addEventListener('click', runAction);    // Add toggle switch click handler for preview fingerprint
+    document.getElementById('toggle-preview-fp').addEventListener('click', async (event) => {
+        event.stopPropagation(); // Prevent triggering the container click
+        
         if (shellRunning) return;
         shellRunning = true;
+        
         try {
-            const isChecked = document.getElementById('toggle-preview-fp').checked;
-            await execCommand(`sed -i 's/^FORCE_PREVIEW=.*$/FORCE_PREVIEW=${isChecked ? 0 : 1}/' /data/adb/modules/playintegrityfix/action.sh`);
-            appendToOutput(`[+] Switched fingerprint to ${isChecked ? 'beta' : 'preview'}`);
-            loadPreviewFingerprintConfig();
+            const newState = document.getElementById('toggle-preview-fp').checked;
+            await execCommand(`sed -i 's/^FORCE_PREVIEW=.*$/FORCE_PREVIEW=${newState ? 0 : 1}/' /data/adb/modules/playintegrityfix/action.sh`);
+            appendToOutput(`[+] Switched fingerprint to ${newState ? 'preview' : 'beta'}`);
         } catch (error) {
+            // Revert toggle state on error
+            document.getElementById('toggle-preview-fp').checked = !document.getElementById('toggle-preview-fp').checked;
             appendToOutput("[!] Failed to switch fingerprint type");
             console.error('Failed to switch fingerprint type:', error);
         }
         shellRunning = false;
-    });   
+    });
+    
+    // Add container click handler for preview fingerprint
+    previewFpToggle.addEventListener('click', async (event) => {
+        // Only handle clicks that are not on the toggle switch itself
+        if (event.target.closest('.toggle-switch')) {
+            return;
+        }
+        
+        if (shellRunning) return;
+        shellRunning = true;
+        
+        try {
+            const currentState = document.getElementById('toggle-preview-fp').checked;
+            const newState = !currentState;
+            
+            document.getElementById('toggle-preview-fp').checked = newState;
+            await execCommand(`sed -i 's/^FORCE_PREVIEW=.*$/FORCE_PREVIEW=${newState ? 0 : 1}/' /data/adb/modules/playintegrityfix/action.sh`);
+            appendToOutput(`[+] Switched fingerprint to ${newState ? 'preview' : 'beta'}`);
+        } catch (error) {
+            // Revert toggle state on error
+            document.getElementById('toggle-preview-fp').checked = currentState;
+            appendToOutput("[!] Failed to switch fingerprint type");
+            console.error('Failed to switch fingerprint type:', error);
+        }
+        shellRunning = false;
+    });
         clearButton.addEventListener('click', () => {
         terminal.innerHTML = '';
         currentFontSize = 14;
@@ -139,9 +169,19 @@ async function loadSpoofConfig() {
 
 // Function to setup spoof config button
 function setupSpoofConfigButton(container, toggle, type) {
-    document.getElementById(container).addEventListener('click', async () => {
+    document.getElementById(container).addEventListener('click', async (event) => {
+        // Prevent event bubbling if clicked on the toggle switch itself
+        if (event.target.closest('.toggle-switch')) {
+            return;
+        }
+        
         if (shellRunning) return;
         shellRunning = true;
+        
+        // Store the current state before any DOM changes
+        const currentState = toggle.checked;
+        const newState = !currentState;
+        
         try {
             const pifFile = await execCommand(`
                 [ ! -f /data/adb/modules/playintegrityfix/pif.json ] || echo "/data/adb/modules/playintegrityfix/pif.json"
@@ -149,16 +189,57 @@ function setupSpoofConfigButton(container, toggle, type) {
             `);            const files = pifFile.split('\n').filter(line => line.trim() !== '');
             
             for (const line of files) {
-                await updateSpoofConfig(toggle, type, line.trim());
+                await updateSpoofConfig(currentState, type, line.trim());
+            }
+            
+            // Update the toggle state immediately after successful config update
+            toggle.checked = newState;
+            
+            execCommand(`
+                killall com.google.android.gms.unstable || true
+                killall com.android.vending || true
+            `);
+            
+            appendToOutput(`[+] Changed ${type} config to ${newState}`);
+        } catch (error) {
+            // Revert toggle state on error
+            toggle.checked = currentState;
+            appendToOutput(`[!] Failed to update ${type} config`);
+            console.error(`Failed to update ${type} config:`, error);
+        }
+        shellRunning = false;
+    });
+    
+    // Add separate event listener for the toggle switch itself
+    toggle.addEventListener('click', async (event) => {
+        event.stopPropagation(); // Prevent triggering the container click
+        
+        if (shellRunning) return;
+        shellRunning = true;
+        
+        // Store the target state (toggle has already changed due to click)
+        const newState = toggle.checked;
+        const oldState = !newState;
+        
+        try {
+            const pifFile = await execCommand(`
+                [ ! -f /data/adb/modules/playintegrityfix/pif.json ] || echo "/data/adb/modules/playintegrityfix/pif.json"
+                [ ! -f /data/adb/pif.json ] || echo "/data/adb/pif.json"
+            `);            const files = pifFile.split('\n').filter(line => line.trim() !== '');
+            
+            for (const line of files) {
+                await updateSpoofConfig(oldState, type, line.trim());
             }
             
             execCommand(`
                 killall com.google.android.gms.unstable || true
                 killall com.android.vending || true
             `);
-            loadSpoofConfig();
-            appendToOutput(`[+] Changed ${type} config to ${!toggle.checked}`);
+            
+            appendToOutput(`[+] Changed ${type} config to ${newState}`);
         } catch (error) {
+            // Revert toggle state on error
+            toggle.checked = oldState;
             appendToOutput(`[!] Failed to update ${type} config`);
             console.error(`Failed to update ${type} config:`, error);
         }
@@ -167,11 +248,10 @@ function setupSpoofConfigButton(container, toggle, type) {
 }
 
 // Function to update spoof config
-async function updateSpoofConfig(toggle, type, pifFile) {
-    const isChecked = toggle.checked;
+async function updateSpoofConfig(currentState, type, pifFile) {
     const pifJson = await execCommand(`cat ${pifFile}`);
     const config = JSON.parse(pifJson);
-    config[type] = !isChecked;
+    config[type] = !currentState; // Set to opposite of current state
     const newPifJson = JSON.stringify(config, null, 2);
     await execCommand(`echo '${newPifJson}' > ${pifFile}`);
 }
@@ -515,19 +595,51 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (visibleLists.length > 0) visibleLists[visibleLists.length - 1].style.borderBottom = 'none';
 });
 
-// Cron toggle event listener
-cronToggleContainer.addEventListener('click', async () => {
+// Cron toggle event listeners
+cronToggle.addEventListener('click', async (event) => {
+    event.stopPropagation(); // Prevent triggering the container click
+    
     if (shellRunning) return;
     shellRunning = true;
     try {
-        const isChecked = cronToggle.checked;
+        const newState = cronToggle.checked;
         const timeSettings = getCurrentTimeSettings();
         
-        const success = await setupCronJob(!isChecked, timeSettings);
+        const success = await setupCronJob(newState, timeSettings);
         if (success) {
-            cronToggle.checked = !isChecked;
             const intervalSection = document.getElementById('cron-interval-section');
-            intervalSection.style.display = !isChecked ? 'block' : 'none';
+            intervalSection.style.display = newState ? 'block' : 'none';
+        } else {
+            // Revert on failure
+            cronToggle.checked = !newState;
+        }
+    } catch (error) {
+        // Revert toggle state on error
+        cronToggle.checked = !cronToggle.checked;
+        appendToOutput("[!] Failed to toggle cron job");
+        console.error('Failed to toggle cron job:', error);
+    }
+    shellRunning = false;
+});
+
+cronToggleContainer.addEventListener('click', async (event) => {
+    // Only handle clicks that are not on the toggle switch itself
+    if (event.target.closest('.toggle-switch')) {
+        return;
+    }
+    
+    if (shellRunning) return;
+    shellRunning = true;
+    try {
+        const currentState = cronToggle.checked;
+        const newState = !currentState;
+        const timeSettings = getCurrentTimeSettings();
+        
+        const success = await setupCronJob(newState, timeSettings);
+        if (success) {
+            cronToggle.checked = newState;
+            const intervalSection = document.getElementById('cron-interval-section');
+            intervalSection.style.display = newState ? 'block' : 'none';
         }
     } catch (error) {
         appendToOutput("[!] Failed to toggle cron job");
