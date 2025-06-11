@@ -2,8 +2,12 @@ name: Android CI
 
 on:
   push:
-    branches: inject
+    branches: my_fixes
     paths-ignore: '**.md'
+  pull_request:
+    branches: my_fixes
+    paths-ignore: '**.md'
+  workflow_dispatch:
 
 jobs:
   build:
