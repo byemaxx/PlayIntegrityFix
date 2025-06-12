@@ -29,10 +29,8 @@
         /* Background colors */
         --bg-primary: var(--background, #151515);
         --bg-secondary: var(--tonalSurface, #292929);
-        --bg-input: var(--surfaceBright, #1b1b1b);
-
-        /* Text colors */
-        --text-constant: var(--onSurface, #eee);;
+        --bg-input: var(--surfaceBright, #1b1b1b);        /* Text colors */
+        --text-constant: var(--onSurface, #eee);
         --text-primary: var(--onSurface, #eee);
         --text-muted: #C2C2C2;
 
@@ -81,8 +79,7 @@ body {
     min-height: 25px;
     padding: 8px 20px;
     white-space: nowrap;
-    text-align: left;
-    border-bottom: 1px solid var(--border-color);;
+    text-align: left;    border-bottom: 1px solid var(--border-color);
     position: relative;
     overflow: hidden;
 }
@@ -96,10 +93,10 @@ body {
 #advanced {
     display: none;
     justify-content: center;
+}
 
-    span {
-        font-weight: normal;
-    }
+#advanced span {
+    font-weight: normal;
 }
 
 .toggle-text {
@@ -204,10 +201,8 @@ input:checked+.slider:before {
 
 .clear-terminal {
     display: flex;
-    align-items: center;
-
-    svg {
-        fill: var(--text-muted);;
+    align-items: center;    svg {
+        fill: var(--text-muted);
     }
 }
 

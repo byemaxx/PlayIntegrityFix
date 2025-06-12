@@ -36,56 +36,23 @@ async function execCommand(command) {
 }
 
 // Apply button event listeners
-function applyButtonEventListeners() {    const fetchButton = document.getElementById('fetch');
-    const previewFpToggle = document.getElementById('preview-fp-toggle-container');
+function applyButtonEventListeners() {
+    const fetchButton = document.getElementById('fetch');
+    const previewFpToggle = document.getElementById('toggle-preview-fp');
+    const previewFpToggleContainer = document.getElementById('preview-fp-toggle-container');
     const clearButton = document.querySelector('.clear-terminal');
     const terminal = document.querySelector('.output-terminal-content');
 
-    fetchButton.addEventListener('click', runAction);    // Add toggle switch click handler for preview fingerprint
-    document.getElementById('toggle-preview-fp').addEventListener('click', async (event) => {
-        event.stopPropagation(); // Prevent triggering the container click
-        
-        if (shellRunning) return;
-        shellRunning = true;
-        
-        try {
-            const newState = document.getElementById('toggle-preview-fp').checked;
-            await execCommand(`sed -i 's/^FORCE_PREVIEW=.*$/FORCE_PREVIEW=${newState ? 0 : 1}/' /data/adb/modules/playintegrityfix/action.sh`);
+    fetchButton.addEventListener('click', runAction);    // Setup preview fingerprint toggle using unified handler
+    setupUnifiedToggleHandler(
+        previewFpToggle,
+        previewFpToggleContainer,
+        async (newState) => {
+            await execCommand(`sed -i 's/^FORCE_PREVIEW=.*$/FORCE_PREVIEW=${newState ? 1 : 0}/' /data/adb/modules/playintegrityfix/action.sh`);
             appendToOutput(`[+] Switched fingerprint to ${newState ? 'preview' : 'beta'}`);
-        } catch (error) {
-            // Revert toggle state on error
-            document.getElementById('toggle-preview-fp').checked = !document.getElementById('toggle-preview-fp').checked;
-            appendToOutput("[!] Failed to switch fingerprint type");
-            console.error('Failed to switch fingerprint type:', error);
-        }
-        shellRunning = false;
-    });
-    
-    // Add container click handler for preview fingerprint
-    previewFpToggle.addEventListener('click', async (event) => {
-        // Only handle clicks that are not on the toggle switch itself
-        if (event.target.closest('.toggle-switch')) {
-            return;
-        }
-        
-        if (shellRunning) return;
-        shellRunning = true;
-        
-        try {
-            const currentState = document.getElementById('toggle-preview-fp').checked;
-            const newState = !currentState;
-            
-            document.getElementById('toggle-preview-fp').checked = newState;
-            await execCommand(`sed -i 's/^FORCE_PREVIEW=.*$/FORCE_PREVIEW=${newState ? 0 : 1}/' /data/adb/modules/playintegrityfix/action.sh`);
-            appendToOutput(`[+] Switched fingerprint to ${newState ? 'preview' : 'beta'}`);
-        } catch (error) {
-            // Revert toggle state on error
-            document.getElementById('toggle-preview-fp').checked = currentState;
-            appendToOutput("[!] Failed to switch fingerprint type");
-            console.error('Failed to switch fingerprint type:', error);
-        }
-        shellRunning = false;
-    });
+        },
+        'fingerprint type'
+    );
         clearButton.addEventListener('click', () => {
         terminal.innerHTML = '';
         currentFontSize = 14;
@@ -167,68 +134,72 @@ async function loadSpoofConfig() {
     }
 }
 
-// Function to setup spoof config button
-function setupSpoofConfigButton(container, toggle, type) {
-    document.getElementById(container).addEventListener('click', async (event) => {
-        // Prevent event bubbling if clicked on the toggle switch itself
-        if (event.target.closest('.toggle-switch')) {
-            return;
-        }
-        
-        if (shellRunning) return;
-        shellRunning = true;
-        
-        // Store the current state before any DOM changes
-        const currentState = toggle.checked;
-        const newState = !currentState;
-        
-        try {
-            const pifFile = await execCommand(`
-                [ ! -f /data/adb/modules/playintegrityfix/pif.json ] || echo "/data/adb/modules/playintegrityfix/pif.json"
-                [ ! -f /data/adb/pif.json ] || echo "/data/adb/pif.json"
-            `);            const files = pifFile.split('\n').filter(line => line.trim() !== '');
-            
-            for (const line of files) {
-                await updateSpoofConfig(currentState, type, line.trim());
-            }
-            
-            // Update the toggle state immediately after successful config update
-            toggle.checked = newState;
-            
-            execCommand(`
-                killall com.google.android.gms.unstable || true
-                killall com.android.vending || true
-            `);
-            
-            appendToOutput(`[+] Changed ${type} config to ${newState}`);
-        } catch (error) {
-            // Revert toggle state on error
-            toggle.checked = currentState;
-            appendToOutput(`[!] Failed to update ${type} config`);
-            console.error(`Failed to update ${type} config:`, error);
-        }
-        shellRunning = false;
-    });
+// Unified toggle handler function
+function setupUnifiedToggleHandler(toggleElement, containerElement, updateFunction, description) {
+    let isProcessing = false;
     
-    // Add separate event listener for the toggle switch itself
-    toggle.addEventListener('click', async (event) => {
-        event.stopPropagation(); // Prevent triggering the container click
+    const handleToggle = async (newState) => {
+        if (isProcessing || shellRunning) return;
         
-        if (shellRunning) return;
+        isProcessing = true;
         shellRunning = true;
         
-        // Store the target state (toggle has already changed due to click)
-        const newState = toggle.checked;
         const oldState = !newState;
         
         try {
+            await updateFunction(newState);
+            toggleElement.checked = newState;
+        } catch (error) {
+            // Revert state on error
+            toggleElement.checked = oldState;
+            appendToOutput(`[!] Failed to update ${description}`);
+            console.error(`${description} update failed:`, error);
+        } finally {
+            isProcessing = false;
+            shellRunning = false;
+        }
+    };
+    
+    // Only listen to checkbox change event to avoid duplication
+    toggleElement.addEventListener('change', async (event) => {
+        event.stopPropagation();
+        await handleToggle(toggleElement.checked);
+    });
+    
+    // Container click manually triggers checkbox
+    if (containerElement) {
+        containerElement.addEventListener('click', async (event) => {
+            // Ignore if clicking on the toggle switch itself
+            if (event.target.closest('.toggle-switch')) {
+                return;
+            }
+            
+            if (isProcessing || shellRunning) return;
+            
+            // Manually toggle state and trigger change event
+            toggleElement.checked = !toggleElement.checked;
+            toggleElement.dispatchEvent(new Event('change'));
+        });
+    }
+}
+
+// Function to setup spoof config button using unified handler
+function setupSpoofConfigButton(container, toggle, type) {
+    const containerElement = document.getElementById(container);
+    
+    setupUnifiedToggleHandler(
+        toggle,
+        containerElement,
+        async (newState) => {
             const pifFile = await execCommand(`
                 [ ! -f /data/adb/modules/playintegrityfix/pif.json ] || echo "/data/adb/modules/playintegrityfix/pif.json"
                 [ ! -f /data/adb/pif.json ] || echo "/data/adb/pif.json"
-            `);            const files = pifFile.split('\n').filter(line => line.trim() !== '');
+            `);
+            
+            const files = pifFile.split('\n').filter(line => line.trim() !== '');
             
             for (const line of files) {
-                await updateSpoofConfig(oldState, type, line.trim());
+                await updateSpoofConfig(!newState, type, line.trim());
             }
             
             execCommand(`
@@ -237,14 +208,9 @@ function setupSpoofConfigButton(container, toggle, type) {
             `);
             
             appendToOutput(`[+] Changed ${type} config to ${newState}`);
-        } catch (error) {
-            // Revert toggle state on error
-            toggle.checked = oldState;
-            appendToOutput(`[!] Failed to update ${type} config`);
-            console.error(`Failed to update ${type} config:`, error);
-        }
-        shellRunning = false;
-    });
+        },
+        `${type} config`
+    );
 }
 
 // Function to update spoof config
@@ -261,10 +227,10 @@ async function loadPreviewFingerprintConfig() {
     try {
         const previewFpToggle = document.getElementById('toggle-preview-fp');
         const isChecked = await execCommand(`grep -o 'FORCE_PREVIEW=[01]' /data/adb/modules/playintegrityfix/action.sh | cut -d'=' -f2`);
-        if (isChecked === '0') {
-            previewFpToggle.checked = false;
-        } else {
+        if (isChecked === '1') {
             previewFpToggle.checked = true;
+        } else {
+            previewFpToggle.checked = false;
         }
     } catch (error) {
         appendToOutput("[!] Failed to load preview fingerprint config");
@@ -583,8 +549,27 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     loadPreviewFingerprintConfig();
     applyButtonEventListeners();
+    
+    // Setup cron toggle using unified handler
+    setupUnifiedToggleHandler(
+        cronToggle,
+        cronToggleContainer,
+        async (newState) => {
+            const timeSettings = getCurrentTimeSettings();
+            const success = await setupCronJob(newState, timeSettings);
+            if (success) {
+                const intervalSection = document.getElementById('cron-interval-section');
+                intervalSection.style.display = newState ? 'block' : 'none';
+            } else {
+                throw new Error('Cron setup failed');
+            }
+        },
+        'cron job'
+    );
+    
     applyRippleEffect();
-      // Enable all toggle elements after loading configs
+    
+    // Enable all toggle elements after loading configs
     document.querySelectorAll('input[type="checkbox"], input[type="number"], select').forEach(element => {
         element.disabled = false;
     });
@@ -593,59 +578,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     lists.forEach(list => list.style.borderBottom = '1px solid var(--border-color)');
     const visibleLists = lists.filter(list => getComputedStyle(list).display !== 'none');
     if (visibleLists.length > 0) visibleLists[visibleLists.length - 1].style.borderBottom = 'none';
-});
-
-// Cron toggle event listeners
-cronToggle.addEventListener('click', async (event) => {
-    event.stopPropagation(); // Prevent triggering the container click
-    
-    if (shellRunning) return;
-    shellRunning = true;
-    try {
-        const newState = cronToggle.checked;
-        const timeSettings = getCurrentTimeSettings();
-        
-        const success = await setupCronJob(newState, timeSettings);
-        if (success) {
-            const intervalSection = document.getElementById('cron-interval-section');
-            intervalSection.style.display = newState ? 'block' : 'none';
-        } else {
-            // Revert on failure
-            cronToggle.checked = !newState;
-        }
-    } catch (error) {
-        // Revert toggle state on error
-        cronToggle.checked = !cronToggle.checked;
-        appendToOutput("[!] Failed to toggle cron job");
-        console.error('Failed to toggle cron job:', error);
-    }
-    shellRunning = false;
-});
-
-cronToggleContainer.addEventListener('click', async (event) => {
-    // Only handle clicks that are not on the toggle switch itself
-    if (event.target.closest('.toggle-switch')) {
-        return;
-    }
-    
-    if (shellRunning) return;
-    shellRunning = true;
-    try {
-        const currentState = cronToggle.checked;
-        const newState = !currentState;
-        const timeSettings = getCurrentTimeSettings();
-        
-        const success = await setupCronJob(newState, timeSettings);
-        if (success) {
-            cronToggle.checked = newState;
-            const intervalSection = document.getElementById('cron-interval-section');
-            intervalSection.style.display = newState ? 'block' : 'none';
-        }
-    } catch (error) {
-        appendToOutput("[!] Failed to toggle cron job");
-        console.error('Failed to toggle cron job:', error);
-    }
-    shellRunning = false;
 });
 
 // Cron interval change event listener

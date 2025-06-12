@@ -77,6 +77,7 @@ sleep_pause() {
 download_fail() {
 	dl_domain=$(echo "$1" | awk -F[/:] '{print $4}')
 	echo "$1" | grep -q "\.zip$" && return
+	
 	# Clean up on download fail
 	rm -rf "$TEMPDIR"
 	
@@ -85,9 +86,10 @@ download_fail() {
 		sleep_pause
 		exit 1
 	}
+	
 	conflict_module=$(ls /data/adb/modules | grep busybox)
 	for i in $conflict_module; do 
-		echo "[!] Please remove $conflict_module and try again." 
+		echo "[!] Please remove $i and try again." 
 	done
 	echo "[!] download failed!"
 	echo "[x] bailing out!"
@@ -148,8 +150,11 @@ SECURITY_PATCH="$(strings PIXEL_ZIP_METADATA | grep -am1 'security-patch-level='
 
 # Validate required field to prevent empty pif.json
 if [ -z "$FINGERPRINT" ] || [ -z "$SECURITY_PATCH" ]; then
-	# link to download pixel rom metadata that skipped connection check due to ulimit
-	download_fail "https://dl.google.com"
+    echo "[!] Failed to extract required fields from OTA metadata"
+    echo "[!] FINGERPRINT: '$FINGERPRINT'"
+    echo "[!] SECURITY_PATCH: '$SECURITY_PATCH'"
+    # Trigger download failure handling to check connectivity and cleanup
+    download_fail "https://dl.google.com"
 fi
 
 # Preserve previous setting
@@ -187,20 +192,19 @@ parse_date() {
     local month_name=$(echo "$input_date" | awk '{print $1}')
     local day=$(echo "$input_date" | awk '{print $2}' | sed 's/,//')
     local year=$(echo "$input_date" | awk '{print $3}')
-    
-    case "$month_name" in
-        "January") month="01" ;;
-        "February") month="02" ;;
-        "March") month="03" ;;
-        "April") month="04" ;;
-        "May") month="05" ;;
-        "June") month="06" ;;
-        "July") month="07" ;;
-        "August") month="08" ;;
-        "September") month="09" ;;
-        "October") month="10" ;;
-        "November") month="11" ;;
-        "December") month="12" ;;
+      case "$month_name" in
+        "January") local month="01" ;;
+        "February") local month="02" ;;
+        "March") local month="03" ;;
+        "April") local month="04" ;;
+        "May") local month="05" ;;
+        "June") local month="06" ;;
+        "July") local month="07" ;;
+        "August") local month="08" ;;
+        "September") local month="09" ;;
+        "October") local month="10" ;;
+        "November") local month="11" ;;
+        "December") local month="12" ;;
         *) return 1 ;;
     esac
     
@@ -228,27 +232,44 @@ if [ -n "$BETA_REL_DATE" ]; then
     if [ -z "$BETA_EXP_DATE" ]; then
         BETA_EXP_DATE=$(date -d "$BETA_REL_DATE + 42 days" +%Y-%m-%d 2>/dev/null)
     fi
-    
-    # 如果都失败，使用简单的近似计算（假设每月30天）
+      # 如果都失败，使用改进的日期计算（考虑实际月份天数）
     if [ -z "$BETA_EXP_DATE" ]; then
         year=$(echo "$BETA_REL_DATE" | cut -d- -f1)
         month=$(echo "$BETA_REL_DATE" | cut -d- -f2)
         day=$(echo "$BETA_REL_DATE" | cut -d- -f3)
         
-        # 加42天的简单近似
+        # 加42天的改进计算
         new_day=$((day + 42))
         new_month=$month
         new_year=$year
         
-        if [ $new_day -gt 30 ]; then
-            new_month=$((month + 1))
-            new_day=$((new_day - 30))
-            if [ $new_month -gt 12 ]; then
-                new_year=$((year + 1))
-                new_month=1
+        # 考虑不同月份的天数
+        while [ $new_day -gt 28 ]; do
+            days_in_month=31
+            case $new_month in
+                04|06|09|11) days_in_month=30 ;;
+                02) 
+                    # 简化的闰年检查
+                    if [ $((new_year % 4)) -eq 0 ] && { [ $((new_year % 100)) -ne 0 ] || [ $((new_year % 400)) -eq 0 ]; }; then
+                        days_in_month=29
+                    else
+                        days_in_month=28
+                    fi
+                    ;;
+            esac
+            
+            if [ $new_day -gt $days_in_month ]; then
+                new_day=$((new_day - days_in_month))
+                new_month=$((new_month + 1))
+                if [ $new_month -gt 12 ]; then
+                    new_year=$((new_year + 1))
+                    new_month=1
+                fi
+            else
+                break
             fi
-        fi
-          BETA_EXP_DATE=$(printf "%04d-%02d-%02d" "$new_year" "$new_month" "$new_day")
+        done
+        BETA_EXP_DATE=$(printf "%04d-%02d-%02d" "$new_year" "$new_month" "$new_day")
     fi
 fi
 
