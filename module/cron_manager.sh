@@ -293,14 +293,7 @@ restore_cron_job() {
             return
         fi
     fi
-    
-    # Fallback if no config file exists
-    log_info "No saved cron configuration found, using default 24h interval"
-    if check_busybox_cron; then
-        create_busybox_cron_job "24h"
-    elif check_system_cron; then
-        create_system_cron_job "24h"
-    fi
+    log_info "No saved cron configuration found, auto-update remains disabled"
 }
 
 # Function to save cron configuration
