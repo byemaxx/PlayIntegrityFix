@@ -159,12 +159,12 @@ static void parseJSON() {
     if (json.contains("spoofProvider") && json["spoofProvider"].is_boolean()) {
         spoofProvider = json["spoofProvider"].get<bool>();
         json.erase("spoofProvider");
-    }
-
-    if (json.contains("spoofProps") && json["spoofProps"].is_boolean()) {
+    }    if (json.contains("spoofProps") && json["spoofProps"].is_boolean()) {
         spoofProps = json["spoofProps"].get<bool>();
         json.erase("spoofProps");
-    }    if (json.contains("spoofSignature") && json["spoofSignature"].is_boolean()) {
+    }
+
+    if (json.contains("spoofSignature") && json["spoofSignature"].is_boolean()) {
         spoofSignature = json["spoofSignature"].get<bool>();
         json.erase("spoofSignature");
     }
@@ -335,15 +335,15 @@ init(JavaVM *vm, const std::string &gmsDir, bool isGmsUnstable, bool isVending) 
     json = nlohmann::json::parse(f, nullptr, false, true);
     fclose(f);
 
-    parseJSON();
-
-    if (isGmsUnstable) {
+    parseJSON();    if (isGmsUnstable) {
         if (spoofProps) {
             UpdateBuildFields();
-            LOGD("[INJECT] Updated build fields because spoofProps is enabled");
+            LOGD("[INJECT] Updated build fields because spoofProps is enabled");        
         } else {
             LOGD("[INJECT] Skipped updating build fields because spoofProps is disabled");
-        }        if (spoofProvider || spoofSignature) {
+        }
+        
+        if (spoofProvider || spoofSignature) {
             injectDex();
         } else {
             LOGD("[INJECT] Dex file won't be injected due spoofProvider and spoofSignature are false");

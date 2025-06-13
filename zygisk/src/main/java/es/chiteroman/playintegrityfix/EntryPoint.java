@@ -26,6 +26,7 @@ import java.util.Objects;
 public final class EntryPoint {
     public static final String TAG = "PIF";
     private static final Map<Field, String> map = new HashMap<>();
+
     private static final String signatureData = """
             MIIFyTCCA7GgAwIBAgIVALyxxl+zDS9SL68SzOr48309eAZyMA0GCSqGSIb3DQEBCwUAMHQxCzAJ
             BgNVBAYTAlVTMRMwEQYDVQQIEwpDYWxpZm9ybmlhMRYwFAYDVQQHEw1Nb3VudGFpbiBWaWV3MRQw
@@ -79,9 +80,7 @@ public final class EntryPoint {
         Security.insertProviderAt(customProvider, 1);
         
         Log.i(TAG, "Provider spoofed, DroidGuard requests will be intercepted");
-    }
-
-    private static void spoofSignature() {
+    }    private static void spoofSignature() {
         Signature spoofedSignature = new Signature(Base64.decode(signatureData, Base64.DEFAULT));
         Parcelable.Creator<PackageInfo> originalCreator = PackageInfo.CREATOR;
         Parcelable.Creator<PackageInfo> customCreator = new CustomPackageInfoCreator(originalCreator, spoofedSignature);
@@ -90,8 +89,16 @@ public final class EntryPoint {
             Field creatorField = findField(PackageInfo.class, "CREATOR");
             creatorField.setAccessible(true);
             creatorField.set(null, customCreator);
+            
+            // Check if the replacement was successful
+            if (PackageInfo.CREATOR == customCreator) {
+                Log.i(TAG, "Successfully replaced PackageInfoCreator");
+            } else {
+                Log.w(TAG, "PackageInfoCreator replacement verification failed");
+            }
         } catch (Exception e) {
-            Log.e(TAG, "Couldn't replace PackageInfoCreator: " + e);
+            Log.e(TAG, "Failed to replace PackageInfoCreator: " + e.getMessage());
+            return; // stop execution if replacement fails
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -99,34 +106,50 @@ public final class EntryPoint {
             Log.i(TAG, "Added hidden API exemptions for Android P+ devices");
         }
 
-        try {
-            Field cacheField = findField(PackageManager.class, "sPackageInfoCache");
-            cacheField.setAccessible(true);
-            Object cache = cacheField.get(null);
-            if (cache != null) {
-                Method clearMethod = cache.getClass().getMethod("clear");
-                clearMethod.invoke(cache);
+        safeClearCache("PackageInfoCache", () -> {
+            try {
+                Field cacheField = findField(PackageManager.class, "sPackageInfoCache");
+                cacheField.setAccessible(true);
+                Object cache = cacheField.get(null);
+                if (cache != null) {
+                    Method clearMethod = cache.getClass().getMethod("clear");
+                    clearMethod.invoke(cache);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Couldn't clear PackageInfoCache: " + e);
             }
-        } catch (Exception e) {
-            Log.e(TAG, "Couldn't clear PackageInfoCache: " + e);
-        }
+        });
 
-        try {
-            Field creatorsField = findField(Parcel.class, "mCreators");
-            creatorsField.setAccessible(true);
-            Map<?, ?> mCreators = (Map<?, ?>) creatorsField.get(null);
-            if (mCreators != null) mCreators.clear();
-        } catch (Exception e) {
-            Log.e(TAG, "Couldn't clear Parcel mCreators: " + e);
-        }
+        safeClearCache("Parcel mCreators", () -> {
+            try {
+                Field creatorsField = findField(Parcel.class, "mCreators");
+                creatorsField.setAccessible(true);
+                Map<?, ?> mCreators = (Map<?, ?>) creatorsField.get(null);
+                if (mCreators != null) mCreators.clear();
+            } catch (Exception e) {
+                Log.e(TAG, "Couldn't clear Parcel mCreators: " + e);
+            }
+        });
 
+        safeClearCache("Parcel sPairedCreators", () -> {
+            try {
+                Field creatorsField = findField(Parcel.class, "sPairedCreators");
+                creatorsField.setAccessible(true);
+                Map<?, ?> sPairedCreators = (Map<?, ?>) creatorsField.get(null);                if (sPairedCreators != null) sPairedCreators.clear();
+            } catch (Exception e) {
+                Log.e(TAG, "Couldn't clear Parcel sPairedCreators: " + e);
+            }
+        });
+    }
+
+    // define a method to safely clear caches with logging
+    private static void safeClearCache(String cacheName, Runnable clearOperation) {
         try {
-            Field creatorsField = findField(Parcel.class, "sPairedCreators");
-            creatorsField.setAccessible(true);
-            Map<?, ?> sPairedCreators = (Map<?, ?>) creatorsField.get(null);
-            if (sPairedCreators != null) sPairedCreators.clear();
+            clearOperation.run();
+            Log.d(TAG, "Successfully cleared " + cacheName);
         } catch (Exception e) {
-            Log.e(TAG, "Couldn't clear Parcel sPairedCreators: " + e);
+            Log.w(TAG, "Failed to clear " + cacheName + ": " + e.getMessage());
+            // continue execution even if clearing fails
         }
     }
 
@@ -147,8 +170,7 @@ public final class EntryPoint {
             field = Build.class.getField(name);
         } catch (NoSuchFieldException e) {
             try {
-                field = Build.VERSION.class.getField(name);
-            } catch (NoSuchFieldException ex) {
+                field = Build.VERSION.class.getField(name);            } catch (NoSuchFieldException ex) {
                 return null;
             }
         }
