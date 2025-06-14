@@ -273,15 +273,15 @@ if [ -n "$BETA_REL_DATE" ]; then
     fi
 fi
 
-# Debug output for date parsing
-echo "- Date parsing debug info:"
-echo "  Raw date from HTML: '$REL_DATE_RAW'"
-echo "  Fixed date format: '$REL_DATE_FIXED'"
-echo "  Parsed release date: '$BETA_REL_DATE'"
-echo "  Estimated expiry date: '$BETA_EXP_DATE'"
-echo "  Available date commands:"
-echo "    busybox: $(command -v busybox >/dev/null && echo 'yes' || echo 'no')"
-echo "    date: $(command -v date >/dev/null && echo 'yes' || echo 'no')"
+# # Debug output for date parsing
+# echo "- Date parsing debug info:"
+# echo "  Raw date from HTML: '$REL_DATE_RAW'"
+# echo "  Fixed date format: '$REL_DATE_FIXED'"
+# echo "  Parsed release date: '$BETA_REL_DATE'"
+# echo "  Estimated expiry date: '$BETA_EXP_DATE'"
+# echo "  Available date commands:"
+# echo "    busybox: $(command -v busybox >/dev/null && echo 'yes' || echo 'no')"
+# echo "    date: $(command -v date >/dev/null && echo 'yes' || echo 'no')"
 
 # Determine update method
 UPDATE_METHOD="manual"
