@@ -3,6 +3,11 @@
 # PlayIntegrityFix Cron Management Script
 # This script manages the cron job for automatic pif.json updates
 # Optimized based on crond_start_jobs implementation
+# 
+# Power Optimization Features:
+# - Only starts cron daemon when auto-update is enabled
+# - Stops cron daemon when auto-update is disabled to save power
+# - Preserves cron configuration across reboots
 
 MODPATH="${0%/*}"
 MODDIR="/data/adb/modules/playintegrityfix"
@@ -288,12 +293,12 @@ restore_cron_job() {
             elif check_system_cron; then
                 (crontab -l 2>/dev/null | grep -v "$ACTION_SCRIPT"; echo "$cron_expression CRON_JOB=1 sh $ACTION_SCRIPT > /dev/null 2>&1 $CRON_MARKER") | crontab -
             fi
-            
-            log_info "Restored cron job: $cron_expression (interval: $interval)"
-            return
+              log_info "Restored cron job: $cron_expression (interval: $interval)"
+            return 0
         fi
     fi
     log_info "No saved cron configuration found, auto-update remains disabled"
+    return 1
 }
 
 # Function to save cron configuration
@@ -353,7 +358,9 @@ remove_cron_job_silent() {
 # Function to remove cron job
 remove_cron_job() {
     remove_cron_job_silent
-    log_info "Auto-update disabled"
+    # Stop cron daemon when auto-update is disabled to save power
+    stop_cron_daemon
+    log_info "Auto-update disabled and cron daemon stopped to save power"
 }
 
 # Function to check cron job status
@@ -422,20 +429,25 @@ setup_wake_lock() {
 }
 
 # Main logic
-case "$1" in
-    "start")
+case "$1" in    "start")
         log_system_info
-        if check_cron_daemon; then
-            setup_wake_lock
-            if start_cron_daemon; then
-                restore_cron_job
+        # Check if there's a saved cron configuration
+        if [ -f "$MODDIR/cron_config" ] && [ -s "$MODDIR/cron_config" ]; then
+            # Only start cron daemon if auto-update was previously enabled
+            if check_cron_daemon; then
+                setup_wake_lock
+                if start_cron_daemon; then
+                    restore_cron_job
+                else
+                    log_info "Failed to start cron daemon"
+                    exit 1
+                fi
             else
-                log_info "Failed to start cron daemon"
+                log_info "No cron daemon available on this system"
                 exit 1
             fi
         else
-            log_info "No cron daemon available on this system"
-            exit 1
+            log_info "No saved cron configuration found, skipping cron daemon startup (power saving)"
         fi
         ;;
     "add")
@@ -456,22 +468,27 @@ case "$1" in
     "stop")
         stop_cron_daemon
         remove_cron_job
-        ;;
-    "restart")
+        ;;    "restart")
         log_info "Restarting cron service..."
         stop_cron_daemon
         sleep 2
-        if check_cron_daemon; then
-            if start_cron_daemon; then
-                restore_cron_job
-                setup_wake_lock
+        # Check if there's a saved cron configuration
+        if [ -f "$MODDIR/cron_config" ] && [ -s "$MODDIR/cron_config" ]; then
+            # Only restart cron daemon if auto-update was previously enabled
+            if check_cron_daemon; then
+                if start_cron_daemon; then
+                    restore_cron_job
+                    setup_wake_lock
+                else
+                    log_info "Failed to restart cron daemon"
+                    exit 1
+                fi
             else
-                log_info "Failed to restart cron daemon"
+                log_info "No cron daemon available on this system"
                 exit 1
             fi
         else
-            log_info "No cron daemon available on this system"
-            exit 1
+            log_info "No saved cron configuration found, cron daemon remains stopped (power saving)"
         fi
         ;;
     "status")

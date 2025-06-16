@@ -21,12 +21,21 @@ else
 fi
 echo
 
-# Test 2: Check cron daemon availability
-echo "Test 2: Checking cron daemon availability..."
-if "$CRON_MANAGER" start 2>/dev/null; then
-    echo "✓ Cron daemon is available"
+# Test 2: Check cron daemon availability and smart startup
+echo "Test 2: Checking cron daemon availability and smart startup..."
+# Test the smart startup logic - should not start daemon if no config exists
+"$CRON_MANAGER" start 2>/dev/null
+START_STATUS=$?
+if [ $START_STATUS -eq 0 ]; then
+    echo "✓ Cron manager start command works"
+    # Check if daemon actually started (should not start without config)
+    if pgrep -f "crond" >/dev/null 2>&1; then
+        echo "⚠ Cron daemon started without configuration (this may be expected if config exists)"
+    else
+        echo "✓ Smart startup: daemon not started without configuration"
+    fi
 else
-    echo "⚠ Cron daemon may not be available on this system"
+    echo "⚠ Cron manager may not be available on this system"
 fi
 echo
 
@@ -90,8 +99,37 @@ else
 fi
 echo
 
-# Test 7: Test webUI compatibility
-echo "Test 7: Testing webUI command compatibility..."
+# Test 7: Test power-saving behavior
+echo "Test 7: Testing power-saving behavior..."
+echo "Testing that cron daemon stops when auto-update is disabled..."
+
+# Add a job first
+"$CRON_MANAGER" add 24 >/dev/null 2>&1
+
+# Check if daemon is running
+DAEMON_RUNNING_BEFORE=""
+if pgrep -f "crond" >/dev/null 2>&1; then
+    DAEMON_RUNNING_BEFORE="yes"
+    echo "✓ Cron daemon running when job is active"
+else
+    echo "⚠ Cron daemon not detected (may use different process name)"
+fi
+
+# Remove the job
+"$CRON_MANAGER" remove >/dev/null 2>&1
+
+# Check if daemon stopped
+sleep 2  # Give it a moment to stop
+DAEMON_RUNNING_AFTER=""
+if pgrep -f "crond" >/dev/null 2>&1; then
+    DAEMON_RUNNING_AFTER="yes"
+    echo "⚠ Cron daemon still running after job removal"
+else
+    echo "✓ Power-saving: cron daemon stopped when no jobs active"
+fi
+
+# Test 8: Test webUI compatibility
+echo "Test 8: Testing webUI command compatibility..."
 echo "Simulating webUI commands..."
 
 # Test status check command
