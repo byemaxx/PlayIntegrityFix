@@ -5,8 +5,16 @@
     <string name="action_view">View</string>
     <string name="action_auto_security_patch">Auto security patch</string>
     <string name="action_script_only_mode">Script only mode</string>
+    <!-- Target scope -->
+    <string name="scope_title">Target processes</string>
+    <string name="scope_unstable">DroidGuard unstable process</string>
+    <string name="scope_custom_label">Custom process names</string>
+    <string name="scope_save">Save scope</string>
+    <string name="scope_none">none</string>
     <!-- Terminal -->
     <string name="terminal_clear">clear</string>
+    <string name="terminal_collapse">Collapse log</string>
+    <string name="terminal_expand">Expand log</string>
     <!-- Terminal output -->
     <string name="output_enabled">Enable</string>
     <string name="output_disabled">Disable</string>
@@ -25,6 +33,8 @@
     <string name="output_selinux_permissive">SELinux status is permissive.</string>
     <string name="output_testkey">ROM signed with testkey, enable spoofSignature is recommended.</string>
     <string name="output_releasekey">ROM signed with releasekey, enabling spoofSignature might not be useful.</string>
+    <string name="output_scope_saved">Saved target scope</string>
+    <string name="output_error_write_scope">Failed to write target scope</string>
     <!-- Device list dialog -->
     <string name="device_list_title">Select Device</string>
     <string name="device_list_random">Random</string>

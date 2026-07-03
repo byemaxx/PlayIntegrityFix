@@ -120,6 +120,8 @@ for config in $spoofConfig; do
 		eval "$config=false"
 	fi
 done
+targetProcesses="$(grep "^targetProcesses=" "$MODDIR/pif.prop" | tail -n 1 | cut -d= -f2-)"
+[ -n "$targetProcesses" ] || targetProcesses="com.google.android.gms.unstable"
 
 echo "- Dumping values to pif.prop ..."
 echo ""
@@ -134,6 +136,7 @@ spoofProvider=$spoofProvider
 spoofSignature=$spoofSignature
 spoofVendingBuild=$spoofVendingBuild
 spoofVendingSdk=$spoofVendingSdk
+targetProcesses=$targetProcesses
 DEBUG=$DEBUG
 EOF
 

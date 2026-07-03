@@ -3,6 +3,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 namespace pif {
     struct Config {
@@ -17,9 +18,19 @@ namespace pif {
         std::string buildId;
         bool spoofVendingSdk = false;
         bool spoofVendingBuild = false;
+        std::vector<std::string> targetProcesses = {"com.google.android.gms.unstable"};
 
         [[nodiscard]] bool needsDex() const {
             return spoofProvider || spoofSignature;
+        }
+
+        [[nodiscard]] bool targetsProcess(std::string_view process) const {
+            for (const auto &target : targetProcesses) {
+                if (target == process) {
+                    return true;
+                }
+            }
+            return false;
         }
     };
 

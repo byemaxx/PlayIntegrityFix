@@ -70,6 +70,8 @@ if [ -f "/data/adb/modules/playintegrityfix/pif.prop" ]; then
             sed -i "s/$config=.*/$config=false/" "$MODPATH/pif.prop"
         fi
     done
+    targetProcesses=$(grep "^targetProcesses=" "/data/adb/modules/playintegrityfix/pif.prop" | tail -n 1 | cut -d= -f2-)
+    [ -n "$targetProcesses" ] && sed -i "s/^targetProcesses=.*/targetProcesses=$targetProcesses/" "$MODPATH/pif.prop"
 fi
 if [ -f "/data/adb/modules/playintegrityfix/system.prop" ]; then
     cp -af /data/adb/modules/playintegrityfix/system.prop "$MODPATH/system.prop"
@@ -83,7 +85,6 @@ fi
 
 # give exec perm to autopif.sh
 chmod +x "$MODPATH/autopif.sh"
-chmod +x "$MODPATH/autopif_ota.sh"
 
 # Clean up
 for pkg in com.google.android.gms com.android.vending; do

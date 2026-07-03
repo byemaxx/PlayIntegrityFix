@@ -92,6 +92,41 @@ namespace pif {
             return parts;
         }
 
+        std::vector<std::string> splitTargetProcesses(std::string_view processes) {
+            std::vector<std::string> targets;
+            std::string current;
+            current.reserve(processes.size());
+
+            const auto flush = [&]() {
+                const auto target = trim(current);
+                if (target.empty()) {
+                    current.clear();
+                    return;
+                }
+
+                for (const auto &existing : targets) {
+                    if (existing == target) {
+                        current.clear();
+                        return;
+                    }
+                }
+
+                targets.emplace_back(target);
+                current.clear();
+            };
+
+            for (const char ch : processes) {
+                if (ch == ',' || ch == ';') {
+                    flush();
+                    continue;
+                }
+                current.push_back(ch);
+            }
+
+            flush();
+            return targets;
+        }
+
         void expandFingerprint(Config &config, std::string_view fingerprint) {
             const auto parts = splitFingerprint(fingerprint);
             static constexpr std::array<std::string_view, 8> keys = {
@@ -182,6 +217,10 @@ namespace pif {
             config.spoofVendingBuild = parseBool(it->second);
             rawMap.erase(it);
         }
+        if (const auto it = rawMap.find("targetProcesses"); it != rawMap.end()) {
+            config.targetProcesses = splitTargetProcesses(it->second);
+            rawMap.erase(it);
+        }
         if (const auto it = rawMap.find("DEVICE_INITIAL_SDK_INT"); it != rawMap.end()) {
             config.deviceInitialSdkInt = it->second;
             rawMap.erase(it);
@@ -243,6 +282,12 @@ namespace pif {
         ok = ok && writeExact(fd, &config.spoofVendingSdk, sizeof(config.spoofVendingSdk));
         ok = ok && writeExact(fd, &config.spoofVendingBuild, sizeof(config.spoofVendingBuild));
 
+        const uint32_t targetCount = static_cast<uint32_t>(config.targetProcesses.size());
+        ok = ok && writeExact(fd, &targetCount, sizeof(targetCount));
+        for (const auto &target : config.targetProcesses) {
+            ok = ok && writeString(fd, target);
+        }
+
         const uint32_t propCount = static_cast<uint32_t>(config.propMap.size());
         ok = ok && writeExact(fd, &propCount, sizeof(propCount));
         for (const auto &[key, value] : config.propMap) {
@@ -265,6 +310,17 @@ namespace pif {
         ok = ok && readString(fd, parsed.buildId);
         ok = ok && readExact(fd, &parsed.spoofVendingSdk, sizeof(parsed.spoofVendingSdk));
         ok = ok && readExact(fd, &parsed.spoofVendingBuild, sizeof(parsed.spoofVendingBuild));
+
+        uint32_t targetCount = 0;
+        ok = ok && readExact(fd, &targetCount, sizeof(targetCount));
+        parsed.targetProcesses.clear();
+        for (uint32_t i = 0; ok && i < targetCount; ++i) {
+            std::string target;
+            ok = readString(fd, target);
+            if (ok) {
+                parsed.targetProcesses.emplace_back(std::move(target));
+            }
+        }
 
         uint32_t propCount = 0;
         ok = ok && readExact(fd, &propCount, sizeof(propCount));

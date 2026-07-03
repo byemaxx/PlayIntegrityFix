@@ -1,4 +1,4 @@
-import { exec, spawn, toast } from "kernelsu-alt";
+import { exec, spawn } from "kernelsu-alt";
 import '@material/web/all.js';
 import { translations, loadTranslations } from './locales.js';
 
@@ -22,6 +22,8 @@ const spoofConfig = [
     { config: 'spoofSignature', label: 'Spoof Signature' },
     { config: 'spoofVendingSdk', label: 'Spoof Sdk' }
 ];
+
+const DEFAULT_TARGET_PROCESS = 'com.google.android.gms.unstable';
 
 // Append spoofConfig buttons
 function appendSpoofConfigToggles() {
@@ -50,6 +52,32 @@ function appendSpoofConfigToggles() {
     applyButtonEventListeners();
 }
 
+function appendScopeConfigControls() {
+    const buttonBox = document.querySelector('.button-box');
+    if (!buttonBox) return;
+
+    const container = document.createElement('div');
+    container.className = 'scope-section';
+    container.innerHTML = `
+        <div class="scope-title">${translations.scope_title || 'Target processes'}</div>
+        <label class="spoof-option scope-option">
+            ${translations.scope_unstable || DEFAULT_TARGET_PROCESS}
+            <md-switch id="scope-unstable-toggle"></md-switch><md-ripple></md-ripple>
+        </label>
+        <div class="scope-custom">
+            <md-outlined-text-field
+                id="target-processes-input"
+                type="textarea"
+                rows="3"
+                label="${translations.scope_custom_label || 'Custom processes'}">
+            </md-outlined-text-field>
+            <md-filled-button id="save-scope">${translations.scope_save || 'Save scope'}</md-filled-button>
+        </div>
+    `;
+
+    buttonBox.appendChild(container);
+}
+
 // Apply button event listeners
 function applyButtonEventListeners() {
     const fetchBtn = document.getElementById('fetch');
@@ -59,13 +87,15 @@ function applyButtonEventListeners() {
     const securityPatchBtn = document.getElementById('security-patch');
     const scriptOnlyBtn = document.getElementById('script-only');
     const clearButton = document.getElementById('clear-terminal');
+    const terminalToggle = document.getElementById('toggle-terminal');
+    const terminalBox = document.querySelector('.output-terminal');
     const terminal = document.querySelector('.output-terminal-content');
     const selectDeviceDialog = document.getElementById('select-device-dialog');
     const confirmFetchBtn = document.getElementById('confirm-fetch');
-    const githubBtn = document.getElementById('github-btn');
     const helpBtn = document.getElementById('help-btn');
     const helpDialog = document.getElementById('help-dialog');
     const romSignCheck = document.getElementById('rom-sign-check');
+    terminalToggle.setAttribute('aria-label', translations.terminal_collapse || 'Collapse log');
 
     fetchBtn.onclick = () => {
         if (randomRadio.checked) randomRadio.checked = false;
@@ -128,6 +158,14 @@ function applyButtonEventListeners() {
         updateFontSize(currentFontSize);
     }
 
+    terminalToggle.onclick = () => {
+        const collapsed = terminalBox.classList.toggle('collapsed');
+        terminalToggle.setAttribute(
+            'aria-label',
+            collapsed ? translations.terminal_expand || 'Expand log' : translations.terminal_collapse || 'Collapse log',
+        );
+    }
+
     terminal.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
             e.preventDefault();
@@ -154,7 +192,6 @@ function applyButtonEventListeners() {
         initialPinchDistance = null;
     });
     
-    githubBtn.onclick = () => linkRedirect(`https://github.com/${repository}/releases/latest`);
     helpBtn.onclick = () => helpDialog.show();
 
     romSignCheck.onclick = () => {
@@ -168,16 +205,6 @@ function applyButtonEventListeners() {
             }, 600);
         });
     }
-}
-
-function linkRedirect(link) {
-    toast("Redirecting to " + link);
-    setTimeout(() => {
-        exec(`am start -a android.intent.action.VIEW -d ${link}`)
-            .then(({ errno }) => {
-                if (errno !== 0) window.open(link, "_blank");
-            });
-    }, 100);
 }
 
 // Function to load the version from module.prop
@@ -209,11 +236,12 @@ async function loadSpoofConfig() {
             const toggle = document.getElementById(`${item.config}-toggle`);
             toggle.selected = pifMap[item.config];
         });
+        setScopeControls(getTargetProcessesFromMap(pifMap));
 
         if (model === null) model = pifMap.MODEL;
     } catch (error) {
         appendToOutput(`[!] ${translations.output_error_load_spoof_config}: ${error}`, true);
-        appendToOutput('[!] ' + translations.output_warning_third_party_tool);
+        appendToOutput('[!] ' + translations.output_warning_third_party_tools);
         resetPifProp();
     }
 }
@@ -271,9 +299,108 @@ function setupSpoofConfigButton() {
     });
 }
 
-function killGms() {
-    spawn('kill', ['-9', '$(busybox pidof com.google.android.gms.unstable com.android.vending)'],
+function setupScopeConfigButton() {
+    const unstableToggle = document.getElementById('scope-unstable-toggle');
+    const saveButton = document.getElementById('save-scope');
+    if (!unstableToggle || !saveButton) return;
+
+    unstableToggle.addEventListener('change', syncScopeInputFromToggles);
+    saveButton.addEventListener('click', saveScopeConfig);
+}
+
+function killGms(extraProcesses = []) {
+    const processes = normalizeTargetProcesses([
+        DEFAULT_TARGET_PROCESS,
+        'com.android.vending',
+        ...extraProcesses,
+    ]);
+    if (processes.length === 0) return;
+
+    spawn('sh', ['-c', `kill -9 $(busybox pidof ${processes.join(' ')}) 2>/dev/null || true`],
         { env: { PATH: "$PATH:/data/adb/ap/bin:/data/adb/ksu/bin:/data/adb/magisk" } });
+}
+
+function normalizeTargetProcesses(value) {
+    const rawValues = Array.isArray(value) ? value : String(value ?? '').split(/[\s,;]+/);
+    const processes = [];
+
+    rawValues.forEach((item) => {
+        const process = String(item ?? '').trim();
+        if (!/^[A-Za-z0-9._:]+$/.test(process)) return;
+        if (!processes.includes(process)) processes.push(process);
+    });
+
+    return processes;
+}
+
+function getTargetProcessesFromMap(pifMap) {
+    if (Object.prototype.hasOwnProperty.call(pifMap, 'targetProcesses')) {
+        return normalizeTargetProcesses(pifMap.targetProcesses);
+    }
+    return [DEFAULT_TARGET_PROCESS];
+}
+
+function setScopeControls(processes) {
+    const normalized = normalizeTargetProcesses(processes);
+    const unstableToggle = document.getElementById('scope-unstable-toggle');
+    const input = document.getElementById('target-processes-input');
+    if (!unstableToggle || !input) return;
+
+    unstableToggle.selected = normalized.includes(DEFAULT_TARGET_PROCESS);
+    input.value = normalized.join('\n');
+}
+
+function syncScopeInputFromToggles() {
+    const unstableToggle = document.getElementById('scope-unstable-toggle');
+    const input = document.getElementById('target-processes-input');
+    if (!unstableToggle || !input) return;
+
+    const customProcesses = normalizeTargetProcesses(input.value)
+        .filter(process => process !== DEFAULT_TARGET_PROCESS);
+    const processes = [];
+    if (unstableToggle.selected) processes.push(DEFAULT_TARGET_PROCESS);
+    processes.push(...customProcesses);
+    input.value = processes.join('\n');
+}
+
+async function getPifFiles() {
+    const result = await exec(`
+        echo "${moddir}/pif.prop"
+        [ ! -f /data/adb/pif.prop ] || echo "/data/adb/pif.prop"
+    `);
+    if (result.errno !== 0) throw new Error(result.stderr);
+    return result.stdout.split('\n').map(line => line.trim()).filter(Boolean);
+}
+
+async function saveScopeConfig() {
+    if (shellRunning) return;
+
+    const input = document.getElementById('target-processes-input');
+    const processes = normalizeTargetProcesses(input?.value || '');
+    const oldProcesses = [];
+
+    try {
+        const files = await getPifFiles();
+        for (const pifFile of files) {
+            const read = await exec(`cat ${pifFile}`);
+            if (read.errno !== 0) throw new Error(read.stderr);
+
+            const pifMap = parsePropToMap(read.stdout);
+            oldProcesses.push(...getTargetProcessesFromMap(pifMap));
+            pifMap.targetProcesses = processes.join(',');
+            const prop = parseMapToProp(pifMap);
+            const write = await exec(`cat <<'EOF' > ${pifFile}
+${prop}
+EOF`);
+            if (write.errno !== 0) throw new Error(write.stderr);
+        }
+
+        setScopeControls(processes);
+        appendToOutput(`[+] ${translations.output_scope_saved || 'Saved target scope'}: ${processes.join(', ') || (translations.scope_none || 'none')}`);
+        killGms([...oldProcesses, ...processes]);
+    } catch (error) {
+        appendToOutput(`[!] ${translations.output_error_write_scope || 'Failed to write target scope'}: ${error}`, true);
+    }
 }
 
 /**
@@ -359,14 +486,6 @@ function runAction() {
         appendToOutput("");
         muteToggle(false);
     });
-}
-
-function updateAutopif() {
-    muteToggle(true);
-    const scriptOutput = spawn("sh", [`${moddir}/autopif_ota.sh`]);
-    scriptOutput.stdout.on('data', (data) => appendToOutput(data));
-    scriptOutput.stderr.on('data', (data) => appendToOutput(data, true));
-    scriptOutput.on('exit', () => muteToggle(false));
 }
 
 function muteToggle(mute, scriptOnly = null) {
@@ -497,7 +616,7 @@ fi
             });
         })
         .catch(error => {
-            appendToOutput(`[!] ${translations.output_error_fetch_pif_prop}: ` + error, true);
+            appendToOutput(`[!] ${translations.output_error_fetching_pif_prop}: ` + error, true);
         });
 }
 
@@ -658,13 +777,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadTranslations();
     checkMMRL();
     appendSpoofConfigToggles();
+    appendScopeConfigControls();
     loadVersionFromModuleProp();
     await loadSpoofConfig();
     setupSpoofConfigButton();
+    setupScopeConfigButton();
     loadAutoSecurityPatchConfig();
     loadScriptOnlyConfig();
     setupDeviceList();
-    updateAutopif();
     checkSeLinuxStatus();
     checkPropDate();
     checkRomSignature();

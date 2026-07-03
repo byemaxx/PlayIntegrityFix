@@ -67,7 +67,7 @@ if resetprop | grep -qE "persist.sys.pihooks|persist.sys.entryhooks|persist.sys.
     persist.sys.pp.gms false
     persist.sys.pp.vending false
     "
-    echo "$PROPERTIES" | while read -r prop value; do
+    echo "$PROPS" | while read -r prop value; do
         if [ -n "$prop" ]; then
             resetprop -n -p "$prop" "$value"
             resetprop -c $(resetprop -Z "$prop") >/dev/null 2>&1 || true

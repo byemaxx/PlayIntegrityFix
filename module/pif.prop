@@ -8,4 +8,5 @@ spoofProvider=false
 spoofSignature=false
 spoofVendingBuild=true
 spoofVendingSdk=false
+targetProcesses=com.google.android.gms.unstable
 DEBUG=false

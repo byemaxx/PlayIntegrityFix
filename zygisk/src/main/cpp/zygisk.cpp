@@ -25,7 +25,7 @@
 #define CUSTOM_PIF "/data/adb/pif.prop"
 
 #define VENDING_PACKAGE "com.android.vending"
-#define DROIDGUARD_PACKAGE "com.google.android.gms.unstable"
+#define DEFAULT_DROIDGUARD_PROCESS "com.google.android.gms.unstable"
 
 namespace {
 
@@ -126,6 +126,17 @@ bool loadPropBytes(std::vector<uint8_t> &out) {
         return true;
     }
     return readFileBytes(DEFAULT_PIF, out);
+}
+
+bool targetsGmsProcess(std::string_view process) {
+    std::vector<uint8_t> propBytes;
+    if (!loadPropBytes(propBytes)) {
+        return process == DEFAULT_DROIDGUARD_PROCESS;
+    }
+
+    const std::string_view propView(reinterpret_cast<const char *>(propBytes.data()), propBytes.size());
+    const pif::Config config = pif::parseConfig(propView);
+    return config.targetsProcess(process);
 }
 
 bool writeVector(int fd, const std::vector<uint8_t> &buffer) {
@@ -238,6 +249,11 @@ std::string propMapToJson() {
     return json;
 }
 
+bool shouldHookSystemProperties() {
+    return gConfig.spoofProps || !gConfig.deviceInitialSdkInt.empty() ||
+           !gConfig.securityPatch.empty() || !gConfig.buildId.empty();
+}
+
 void modifyCallback(void *cookie, const char *name, const char *value, uint32_t serial) {
     if (!cookie || !name || !value || !o_callback) {
         return;
@@ -246,9 +262,9 @@ void modifyCallback(void *cookie, const char *name, const char *value, uint32_t 
     const char *oldValue = value;
     const std::string_view prop(name);
 
-    if (prop == "init.svc.adbd") {
+    if (gConfig.spoofProps && prop == "init.svc.adbd") {
         value = "stopped";
-    } else if (prop == "sys.usb.state") {
+    } else if (gConfig.spoofProps && prop == "sys.usb.state") {
         value = "mtp";
     } else if (prop.ends_with("api_level")) {
         if (!gConfig.deviceInitialSdkInt.empty()) {
@@ -509,7 +525,7 @@ public:
 
     void preAppSpecialize(AppSpecializeArgs *args) override {
         payloadLoaded = false;
-        isGmsUnstable = false;
+        isGmsTarget = false;
         isVending = false;
         gConfig = {};
         gDexBytes.clear();
@@ -549,9 +565,9 @@ public:
         api->setOption(FORCE_DENYLIST_UNMOUNT);
 
         const std::string_view niceName(name);
-        isGmsUnstable = niceName == DROIDGUARD_PACKAGE;
         isVending = niceName == VENDING_PACKAGE;
-        if (!isGmsUnstable && !isVending) {
+        isGmsTarget = appDir.ends_with("/com.google.android.gms") && targetsGmsProcess(niceName);
+        if (!isGmsTarget && !isVending) {
             api->setOption(DLCLOSE_MODULE_LIBRARY);
             return;
         }
@@ -569,7 +585,7 @@ public:
 
         gEnv = env;
 
-        if (isGmsUnstable) {
+        if (isGmsTarget) {
             if (gConfig.spoofBuild) {
                 updateBuildFields();
             }
@@ -580,7 +596,7 @@ public:
                 LOGD("[INJECT] Dex payload skipped because spoofProvider and spoofSignature are false");
             }
 
-            if (gConfig.spoofProps) {
+            if (shouldHookSystemProperties()) {
                 doHook();
             }
         } else if (isVending) {
@@ -600,7 +616,7 @@ private:
     Api *api = nullptr;
     JNIEnv *env = nullptr;
     bool payloadLoaded = false;
-    bool isGmsUnstable = false;
+    bool isGmsTarget = false;
     bool isVending = false;
 };
 

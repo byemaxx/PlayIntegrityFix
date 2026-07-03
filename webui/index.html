@@ -32,10 +32,15 @@
         <div class="output-terminal">
             <div class="output-terminal-header">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M160-160q-33 0-56.5-23.5T80-240v-480q0-33 23.5-56.5T160-800h640q33 0 56.5 23.5T880-720v480q0 33-23.5 56.5T800-160H160Zm0-80h640v-400H160v400Zm140-40-56-56 103-104-104-104 57-56 160 160-160 160Zm180 0v-80h240v80H480Z"/></svg>
-                <md-text-button id="clear-terminal">
-                    <span data-i18n="terminal_clear">clear</span>
-                    <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm80-160h80v-360h-80v360Zm160 0h80v-360h-80v360Z"/></svg>
-                </md-text-button>
+                <div class="output-terminal-actions">
+                    <md-icon-button id="toggle-terminal" aria-label="Collapse log">
+                        <md-icon><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M480-528 296-344l-56-56 240-240 240 240-56 56-184-184Z"/></svg></md-icon>
+                    </md-icon-button>
+                    <md-text-button id="clear-terminal">
+                        <span data-i18n="terminal_clear">clear</span>
+                        <svg slot="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm80-160h80v-360h-80v360Zm160 0h80v-360h-80v360Z"/></svg>
+                    </md-text-button>
+                </div>
             </div>
             <div class="output-terminal-content"></div>
         </div>
@@ -47,9 +52,6 @@
             <form slot="content" method="dialog">
                 <p>This module has been tampered</p>
                 <p>Please install from official source to proceed</p>
-            </form>
-            <form slot="actions" method="dialog">
-                <md-filled-button id="github-btn" type="button">Download from GitHub</md-filled-button>
             </form>
         </md-dialog>
         <!-- Select device dialog -->

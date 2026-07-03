@@ -28,9 +28,24 @@ tasks.register("copyZygiskFiles") {
     }
 }
 
+tasks.register<Exec>("buildWebUi") {
+    description = "Build WebUI files"
+    workingDir = project.rootDir.resolve("webui")
+    val npx = if (System.getProperty("os.name").lowercase().contains("windows")) "npx.cmd" else "npx"
+    commandLine(npx, "--yes", "pnpm", "build")
+
+    inputs.file(project.rootDir.resolve("webui/package.json"))
+    inputs.file(project.rootDir.resolve("webui/pnpm-lock.yaml"))
+    inputs.dir(project.rootDir.resolve("webui/assets"))
+    inputs.dir(project.rootDir.resolve("webui/public"))
+    inputs.file(project.rootDir.resolve("webui/index.html"))
+    inputs.file(project.rootDir.resolve("webui/vite.config.js"))
+    outputs.dir(project.rootDir.resolve("module/webroot"))
+}
+
 tasks.register<Zip>("zip") {
     description = "Zip Module"
-    dependsOn("copyZygiskFiles")
+    dependsOn("copyZygiskFiles", "buildWebUi")
 
     archiveFileName.set("PlayIntegrityFix.zip")
     destinationDirectory.set(project.rootDir.resolve("out"))
